@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in — QA Scanner</title>
+  <style>
+    body { font-family: 'Helvetica Neue', Arial, sans-serif; background: #f4f4f2;
+      display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+    form { background: #fff; padding: 32px; border-radius: 10px; width: 320px;
+      box-shadow: 0 4px 18px rgba(0,0,0,.08); }
+    h1 { font-size: 18px; margin: 0 0 20px; }
+    label { display: block; font-size: 13px; color: #555; margin: 12px 0 4px; }
+    input { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #ccc;
+      border-radius: 6px; font-size: 14px; }
+    button { margin-top: 20px; width: 100%; padding: 10px; background: #12284b; color: #fff;
+      border: none; border-radius: 6px; font-size: 14px; cursor: pointer; }
+    .error { color: #a93226; font-size: 13px; margin-top: 12px; min-height: 1em; }
+  </style>
+</head>
+<body>
+  <form id="form">
+    <h1>QA Scanner — sign in</h1>
+    <label for="username">Name (optional)</label>
+    <input id="username" autocomplete="username">
+    <label for="password">Password</label>
+    <input id="password" type="password" autocomplete="current-password" required autofocus>
+    <button type="submit">Sign in</button>
+    <div id="error" class="error"></div>
+  </form>
+  <script>
+    document.getElementById('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const res = await fetch('/login', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          username: document.getElementById('username').value,
+          password: document.getElementById('password').value,
+        }),
+      });
+      if (res.ok) location.href = '/';
+      else document.getElementById('error').textContent = 'Wrong password — try again.';
+    });
+  </script>
+</body>
+</html>
