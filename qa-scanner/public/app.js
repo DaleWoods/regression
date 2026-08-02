@@ -29,7 +29,7 @@ function renderTabs() {
     const btn = document.createElement('button');
     btn.className = 'tab' + (b.id === activeId ? ' active' : '');
     btn.style.setProperty('--tab-colour', b.brandColour);
-    btn.innerHTML = `<img src="${b.logo}" alt=""> ${b.name}`;
+    btn.textContent = b.name;
     btn.addEventListener('click', () => selectBrand(b.id));
     nav.appendChild(btn);
   }
