@@ -141,6 +141,17 @@ node src/cli.js --urls https://a.com/p1,https://a.com/p2 --out out/ --no-semanti
 Outputs `report.html`, `issues.csv`, `results.json` into `--out` (default
 `out/`).
 
+## Cloud hosting (alternative to the internal server)
+
+The app is containerised (`Dockerfile`) and ships a Render blueprint
+(`render.yaml` at the repo root). On [Render](https://render.com):
+**New → Blueprint → select this repository**, set `DASHBOARD_PASSWORD` and
+`ANTHROPIC_API_KEY` when prompted, and you get an always-on HTTPS URL.
+Scan results persist on the attached disk. Note: cloud egress IPs are less
+predictable than a VPS's, so rely on the User-Agent allowlist in Akamai
+(see below). The same Dockerfile works on Railway, Fly.io, or any VPS with
+Docker.
+
 ## Run as a service
 
 ### With root: systemd
