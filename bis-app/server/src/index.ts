@@ -9,6 +9,7 @@ import { migrate } from './db/migrate.js';
 import { attachMember } from './auth/middleware.js';
 import { ensureDefaultConfig, ensureSeedCategories } from './services/configService.js';
 import { seedBase, seedDemo } from './db/seed.js';
+import { getMemberByEmail, saveMember } from './services/memberService.js';
 import authRoutes from './routes/auth.js';
 import auditRoutes from './routes/audit.js';
 import configRoutes from './routes/config.js';
@@ -26,6 +27,26 @@ export async function createApp() {
   await ensureDefaultConfig(db);
   await ensureSeedCategories(db);
 
+  // A fresh instance has no members, and sign-in requires one - so without
+  // this nobody could get in to add the committee.
+  if (env.bootstrapAdminEmail) {
+    const existing = await getMemberByEmail(db, env.bootstrapAdminEmail);
+    if (!existing) {
+      const admin = await saveMember(db, {
+        name: env.bootstrapAdminName || env.bootstrapAdminEmail,
+        email: env.bootstrapAdminEmail,
+        team: 'Administrator',
+        role: 'ADMIN',
+      });
+      console.log(`[bis] bootstrapped admin ${admin.email}`);
+    } else if (existing.role !== 'ADMIN' || !existing.active) {
+      // Recovery path: if the only admin was demoted or deactivated by
+      // accident, setting the variable and restarting restores access.
+      await saveMember(db, { ...existing, role: 'ADMIN', active: true });
+      console.log(`[bis] restored admin rights for ${existing.email}`);
+    }
+  }
+
   if (env.seedOnBoot) {
     await seedBase(db);
     // Only on a genuinely empty instance, so a restart never duplicates or
@@ -33,7 +54,7 @@ export async function createApp() {
     const rounds = await db.get<{ count: number }>('SELECT COUNT(*) AS count FROM rounds');
     if (env.seedOnBoot === 'demo' && Number(rounds?.count ?? 0) === 0) {
       const roundId = await seedDemo(db);
-      console.log(`[bis] seeded demo round ${roundId}`);
+      console.log(`[bis] seeded sample round ${roundId}`);
     }
   }
 

@@ -12,7 +12,7 @@ import { AuditPage } from './pages/AuditPage';
 export function App() {
   const { path, navigate } = useRouter();
   const [member, setMember] = useState<Member | null>(null);
-  const [demoMode, setDemoMode] = useState(false);
+  const [interimSignIn, setInterimSignIn] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -23,8 +23,8 @@ export function App() {
       .finally(() => setLoading(false));
     api
       .authMode()
-      .then(({ demoMode }) => setDemoMode(demoMode))
-      .catch(() => setDemoMode(false));
+      .then(({ interimSignIn }) => setInterimSignIn(interimSignIn))
+      .catch(() => setInterimSignIn(false));
   }, []);
 
   if (loading) return <main>Loading…</main>;
@@ -65,9 +65,10 @@ export function App() {
         </div>
       </header>
 
-      {demoMode ? (
+      {interimSignIn ? (
         <p className="demo-banner" role="note">
-          Demo instance — sample data, email-only sign-in. Not for real scoring.
+          Interim sign-in — Microsoft 365 single sign-on is not configured yet, so anyone who knows a committee email
+          address can sign in as them.
         </p>
       ) : null}
 

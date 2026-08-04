@@ -32,17 +32,33 @@ export const env = {
   publicApiOrigin: process.env.PUBLIC_API_ORIGIN ?? process.env.RENDER_EXTERNAL_URL ?? 'http://localhost:4000',
 
   /**
-   * Demo deployment switch. Permits email-only sign-in and a SQLite file in a
-   * production build, and seeds sample data on first boot, so the app can be
-   * hosted for a walkthrough before Entra ID and PostgreSQL are wired up.
-   * It is loudly flagged in the server log and banner-marked in the UI.
-   * Never turn this on for a deployment holding real scoring data.
+   * Three independent deployment choices. They are separate on purpose: a real
+   * instance can run on PostgreSQL with live JIRA and no sample data, while
+   * still using interim email sign-in for the days between going live and the
+   * Entra app registration landing.
    */
-  demoMode: bool(process.env.DEMO_MODE, false),
-  /** '' | 'base' (committee + config) | 'demo' (also a worked-example round). */
-  get seedOnBoot(): string {
-    return process.env.SEED_ON_BOOT ?? (env.demoMode ? 'demo' : '');
-  },
+
+  /**
+   * Permits email-only sign-in in a production build - the interim route in
+   * before Entra ID SSO is configured. Anyone who knows a member's email
+   * address can sign in as them, so this is banner-marked in the UI and
+   * warned about on every boot. Remove it the moment SSO works.
+   */
+  allowEmailSignIn: bool(process.env.ALLOW_EMAIL_SIGN_IN, false),
+
+  /** Permits a SQLite file in a production build, instead of PostgreSQL. */
+  allowSqlite: bool(process.env.ALLOW_SQLITE, false),
+
+  /** '' (none) | 'base' (committee placeholders) | 'demo' (also a sample round). */
+  seedOnBoot: process.env.SEED_ON_BOOT ?? '',
+
+  /**
+   * Ensures an admin member exists on boot, so a brand-new instance has a way
+   * in. Without it nobody can sign in to a fresh database - sign-in requires a
+   * provisioned member, by design (§4).
+   */
+  bootstrapAdminEmail: (process.env.BOOTSTRAP_ADMIN_EMAIL ?? '').trim().toLowerCase(),
+  bootstrapAdminName: process.env.BOOTSTRAP_ADMIN_NAME ?? '',
 
   db: {
     driver: (process.env.DB_DRIVER ?? (process.env.DATABASE_URL ? 'postgres' : 'sqlite')) as DbDriver,
@@ -99,27 +115,41 @@ export function assertProductionSafety(): void {
   if (env.nodeEnv !== 'production') return;
 
   const problems: string[] = [];
+
   // A signed session cookie is what stands between a stranger and someone
-  // else's account, so this is fatal in every production build - demo or not.
+  // else's account. Fatal in every production build, whatever else is set.
   if (env.auth.sessionSecret.startsWith('dev-only')) problems.push('SESSION_SECRET must be set');
 
-  if (env.demoMode) {
-    console.warn(
-      [
-        '',
-        '  ********************************************************************',
-        '  *  DEMO_MODE is on.                                                *',
-        '  *  Anyone who knows a seeded email address can sign in as them,    *',
-        '  *  and data lives in a SQLite file rather than PostgreSQL.         *',
-        '  *  Fine for a walkthrough. Never for real scoring data.            *',
-        '  ********************************************************************',
-        '',
-      ].join('\n'),
+  if (env.auth.mode === 'dev' && !env.allowEmailSignIn) {
+    problems.push(
+      'AUTH_MODE=dev is not permitted in production. Configure Entra ID SSO, or set ALLOW_EMAIL_SIGN_IN=true to accept interim email sign-in.',
     );
-  } else {
-    if (env.auth.mode === 'dev') problems.push('AUTH_MODE=dev is not permitted in production (set DEMO_MODE=true if this is a demo)');
-    if (env.db.driver !== 'postgres') problems.push('production must run on PostgreSQL (DB_DRIVER=postgres)');
+  }
+  if (env.db.driver !== 'postgres' && !env.allowSqlite) {
+    problems.push('production should run on PostgreSQL. Set DATABASE_URL, or set ALLOW_SQLITE=true to accept a SQLite file.');
+  }
+  // An Entra deployment missing its registration cannot sign anyone in; better
+  // to fail at boot than to hand every user a broken login.
+  if (env.auth.mode === 'entra' && !(env.auth.entra.tenantId && env.auth.entra.clientId && env.auth.entra.clientSecret)) {
+    problems.push('AUTH_MODE=entra requires ENTRA_TENANT_ID, ENTRA_CLIENT_ID and ENTRA_CLIENT_SECRET');
   }
 
   if (problems.length) throw new Error(`Unsafe production configuration:\n - ${problems.join('\n - ')}`);
+
+  if (env.allowEmailSignIn && env.auth.mode === 'dev') {
+    console.warn(
+      [
+        '',
+        '  ******************************************************************',
+        '  *  Interim email sign-in is enabled.                             *',
+        '  *  Anyone who knows a member email can sign in as them.          *',
+        '  *  Remove ALLOW_EMAIL_SIGN_IN as soon as Entra ID SSO is live.   *',
+        '  ******************************************************************',
+        '',
+      ].join('\n'),
+    );
+  }
+  if (env.db.driver !== 'postgres') {
+    console.warn('[bis] running on SQLite in production - move to PostgreSQL before this holds data you cannot lose.');
+  }
 }

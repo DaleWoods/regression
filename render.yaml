@@ -1,63 +1,106 @@
 # Render.com blueprint for the Business Impact Scoring app (bis-app/).
-# In the Render dashboard: New → Blueprint → pick this repository, choose the
-# claude/app-requirement-doc-f5ootn branch. Render reads this file and deploys.
 #
-# As written this stands up a DEMO instance: sample data, email-only sign-in,
-# SQLite on a mounted disk. That is what you want for a walkthrough. See
-# bis-app/README.md ("Going beyond the demo") for the switch to Entra ID SSO
-# and PostgreSQL before any real scoring happens.
+# In the Render dashboard: New → Blueprint → this repository → branch
+# claude/app-requirement-doc-f5ootn. Render reads this file, creates the
+# database and the web service, and prompts for the values marked below.
+#
+# This deploys the REAL application on managed PostgreSQL - every feature live,
+# nothing stubbed. Two things depend on credentials only WOSG/IT can issue, and
+# both can be switched on later without a redeploy of anything else:
+#
+#   * Microsoft 365 SSO - until the Entra app registration exists, the instance
+#     uses interim email sign-in (ALLOW_EMAIL_SIGN_IN below). The UI says so
+#     plainly on every page.
+#   * JIRA import / write-back - until the service-account token is set, you add
+#     tickets manually or by CSV and export results as CSV.
+
+databases:
+  - name: bis-db
+    databaseName: bis
+    user: bis
+    # basic-256mb is the smallest paid plan and does not expire. Swap to `free`
+    # to trial it, but note Render deletes free databases after 30 days.
+    plan: basic-256mb
+
 services:
   - type: web
     name: bis-app
     runtime: node
-    # The app lives in a subdirectory of this repo; everything below is
-    # relative to it.
+    # The app lives in a subdirectory of this repo.
     rootDir: bis-app
-    # starter = 512MB, which is plenty: no browser, no image processing.
-    # The PPTX/PDF pack is generated in-process from text.
+    # starter = 512MB, which is ample: no browser, no image processing. The
+    # PPTX/PDF pack is generated in-process from text.
     plan: starter
     buildCommand: npm ci && npm run build
     startCommand: npm start
     healthCheckPath: /healthz
-    disk:
-      # Keeps the SQLite database across deploys and restarts. Drop this block
-      # when you move to PostgreSQL.
-      name: bis-data
-      mountPath: /data
-      sizeGB: 1
     envVars:
       - key: NODE_VERSION
         value: "22"
       - key: NODE_ENV
         value: production
 
-      # --- Demo settings -------------------------------------------------
-      # DEMO_MODE permits email-only sign-in and SQLite in a production build,
-      # and seeds the committee plus a worked-example round on first boot.
-      # The server logs a warning and the UI carries a banner while it is on.
-      - key: DEMO_MODE
-        value: "true"
-      - key: AUTH_MODE
-        value: dev
+      # --- Database ------------------------------------------------------
       - key: DB_DRIVER
-        value: sqlite
-      - key: SQLITE_FILE
-        value: /data/bis.db
+        value: postgres
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bis-db
+          property: connectionString
+      - key: DATABASE_SSL
+        value: "true"
 
-      # Session cookies are signed with this. Render generates it once and
-      # keeps it; it never appears in git.
+      # --- Session -------------------------------------------------------
+      # Render generates this once and keeps it; it never appears in git.
       - key: SESSION_SECRET
         generateValue: true
       - key: SESSION_COOKIE_SECURE
         value: "true"
 
-      # Render injects PORT and RENDER_EXTERNAL_URL; the app reads both, so
-      # links in generated email point at the deployed host automatically.
+      # --- First way in --------------------------------------------------
+      # A fresh database has no members, and sign-in requires a provisioned
+      # member. Set this to YOUR work email at the Render prompt: the app
+      # creates it as an ADMIN on boot, and you add the rest of the committee
+      # in Settings. Setting it again later also restores admin rights if they
+      # are ever lost.
+      - key: BOOTSTRAP_ADMIN_EMAIL
+        sync: false
+      - key: BOOTSTRAP_ADMIN_NAME
+        sync: false
 
-      # --- Optional integrations -----------------------------------------
-      # Set these in the Render dashboard when you want live JIRA import and
-      # write-back. Left blank, the app runs fine and reports them as not
-      # configured. Use a service account token, not a personal one.
+      # --- Sign-in -------------------------------------------------------
+      # Interim: email-only sign-in, because Entra ID is not registered yet.
+      # Anyone who knows a committee email can sign in as them, so the UI
+      # carries a banner and the server warns on every boot.
+      #
+      # When the Entra app registration exists:
+      #   1. set AUTH_MODE=entra
+      #   2. add ENTRA_TENANT_ID / ENTRA_CLIENT_ID / ENTRA_CLIENT_SECRET
+      #   3. set ENTRA_REDIRECT_URI to https://<your-host>/auth/callback
+      #      (and register that exact URI on the app registration)
+      #   4. DELETE ALLOW_EMAIL_SIGN_IN
+      # The server refuses to start on AUTH_MODE=entra with the registration
+      # missing, so a half-finished switch fails loudly rather than quietly.
+      - key: AUTH_MODE
+        value: dev
+      - key: ALLOW_EMAIL_SIGN_IN
+        value: "true"
+      - key: ENTRA_TENANT_ID
+        sync: false
+      - key: ENTRA_CLIENT_ID
+        sync: false
+      - key: ENTRA_CLIENT_SECRET
+        sync: false
+      - key: ENTRA_REDIRECT_URI
+        sync: false
+      # Restricts sign-in to your own domain(s), comma separated, once SSO is on.
+      - key: ENTRA_ALLOWED_EMAIL_DOMAINS
+        sync: false
+
+      # --- JIRA ----------------------------------------------------------
+      # A service account and API token - never a personal login. Once these
+      # are set, "Import from JIRA" and "Write scores to JIRA" go live, and
+      # Settings → JIRA → "Resolve field ids" finds the customfield ids for you.
       - key: JIRA_BASE_URL
         sync: false
       - key: JIRA_EMAIL
@@ -65,9 +108,11 @@ services:
       - key: JIRA_API_TOKEN
         sync: false
 
-      # Microsoft Graph, for distribution and reminder email. With
-      # GRAPH_SEND_ENABLED=false messages are composed and logged but never
-      # sent, so the cadence can be rehearsed safely.
+      # --- Email (Microsoft Graph) ---------------------------------------
+      # With GRAPH_SEND_ENABLED=false, distribution and reminder messages are
+      # composed and logged but never sent, so the cadence can be rehearsed.
+      # Flip to "true" when the app registration has Mail.Send and you are
+      # ready for the committee to receive real email.
       - key: GRAPH_SEND_ENABLED
         value: "false"
       - key: GRAPH_TENANT_ID
@@ -79,22 +124,12 @@ services:
       - key: GRAPH_SENDER_UPN
         sync: false
 
-# --- Production shape (for reference) ------------------------------------
-# When this stops being a demo:
-#   1. Remove the disk block and the DEMO_MODE / AUTH_MODE / DB_DRIVER /
-#      SQLITE_FILE variables above.
-#   2. Uncomment the database below and add:
-#        - key: DB_DRIVER          value: postgres
-#        - key: DATABASE_SSL       value: "true"
-#        - key: DATABASE_URL       fromDatabase: { name: bis-db, property: connectionString }
-#        - key: AUTH_MODE          value: entra
-#        - key: ENTRA_TENANT_ID / ENTRA_CLIENT_ID / ENTRA_CLIENT_SECRET  (sync: false)
-#        - key: ENTRA_REDIRECT_URI value: https://<your-host>/auth/callback
-#   3. Seed the real committee: SEED_ON_BOOT=base on one deploy, then remove it,
-#      or add the members in Settings.
-#
-# databases:
-#   - name: bis-db
-#     databaseName: bis
-#     user: bis
-#     plan: basic-256mb
+      # --- Sample data ---------------------------------------------------
+      # Left empty: the instance starts clean, as agreed (§12.5). To pre-fill a
+      # sample round for a walkthrough, set SEED_ON_BOOT=demo, deploy once,
+      # then remove it. It only ever seeds a database with no rounds in it.
+      - key: SEED_ON_BOOT
+        value: ""
+
+      # Render injects PORT and RENDER_EXTERNAL_URL; the app reads both, so
+      # links in generated email point at the deployed host automatically.

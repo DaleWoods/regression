@@ -195,7 +195,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
-  authMode: () => request<{ mode: 'entra' | 'dev'; demoMode: boolean; tenantConfigured: boolean }>('/auth/mode'),
+  authMode: () => request<{ mode: 'entra' | 'dev'; interimSignIn: boolean; tenantConfigured: boolean }>('/auth/mode'),
   devLogin: (email: string) =>
     request<{ member: Member }>('/auth/dev-login', { method: 'POST', body: JSON.stringify({ email }) }),
   logout: () => request<{ ok: boolean; signOutUrl: string | null }>('/auth/logout', { method: 'POST' }),

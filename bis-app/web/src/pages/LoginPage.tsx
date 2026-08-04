@@ -2,15 +2,9 @@ import { useEffect, useState } from 'react';
 import { api, type Member } from '../api';
 
 /** Entra ID SSO in every deployed environment; the email box is local dev only. */
-const DEMO_ACCOUNTS = [
-  { email: 'nikita@example.com', label: 'Nikita — coordinator' },
-  { email: 'matt@example.com', label: 'Matt — committee (UX)' },
-  { email: 'leadership@example.com', label: 'Leadership — read-only viewer' },
-];
-
 export function LoginPage({ onSignedIn }: { onSignedIn: (member: Member) => void }) {
   const [mode, setMode] = useState<'entra' | 'dev' | null>(null);
-  const [demoMode, setDemoMode] = useState(false);
+  const [interimSignIn, setInterimSignIn] = useState(false);
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -18,9 +12,9 @@ export function LoginPage({ onSignedIn }: { onSignedIn: (member: Member) => void
   useEffect(() => {
     api
       .authMode()
-      .then(({ mode, demoMode }) => {
+      .then(({ mode, interimSignIn }) => {
         setMode(mode);
-        setDemoMode(demoMode);
+        setInterimSignIn(interimSignIn);
       })
       .catch(() => setMode('entra'));
   }, []);
@@ -55,28 +49,18 @@ export function LoginPage({ onSignedIn }: { onSignedIn: (member: Member) => void
               await signIn(email);
             }}
           >
-            {demoMode ? (
-              <>
-                <div className="notice warn">
-                  <strong>Demo instance.</strong> Sign-in is email-only and the data is sample data. The real deployment
-                  uses Microsoft 365 single sign-on.
-                </div>
-                <p style={{ marginTop: 0 }}>Pick a role to explore:</p>
-                <div className="row" style={{ marginBottom: '1rem', flexDirection: 'column', alignItems: 'stretch' }}>
-                  {DEMO_ACCOUNTS.map((account) => (
-                    <button key={account.email} type="button" className="secondary" disabled={busy} onClick={() => signIn(account.email)}>
-                      {account.label}
-                    </button>
-                  ))}
-                </div>
-              </>
+            {interimSignIn ? (
+              <div className="notice warn">
+                <strong>Interim sign-in.</strong> Microsoft 365 single sign-on is not configured on this instance yet, so
+                sign in with your committee email address for now.
+              </div>
             ) : (
               <div className="notice">
                 Local development mode. In deployed environments this is replaced by Entra ID single sign-on.
               </div>
             )}
             <div className="field">
-              <label htmlFor="email">{demoMode ? 'Or sign in as another committee member' : 'Committee email'}</label>
+              <label htmlFor="email">Committee email</label>
               <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
             </div>
             <button type="submit" disabled={busy}>

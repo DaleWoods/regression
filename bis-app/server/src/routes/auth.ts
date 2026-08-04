@@ -12,7 +12,9 @@ const STATE_COOKIE = 'bis_auth_state';
 router.get('/mode', (_req, res) => {
   res.json({
     mode: env.auth.mode,
-    demoMode: env.demoMode,
+    // True when a deployed instance is using interim email sign-in rather
+    // than SSO - the UI says so plainly rather than looking like SSO.
+    interimSignIn: env.auth.mode === 'dev' && env.nodeEnv === 'production',
     tenantConfigured: Boolean(env.auth.entra.tenantId && env.auth.entra.clientId),
   });
 });
