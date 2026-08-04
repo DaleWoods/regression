@@ -1,0 +1,75 @@
+import path from 'node:path';
+import fs from 'node:fs';
+import express from 'express';
+import cookieParser from 'cookie-parser';
+import cors from 'cors';
+import { assertProductionSafety, env } from './config/env.js';
+import { closeDb, getDb } from './db/index.js';
+import { migrate } from './db/migrate.js';
+import { attachMember } from './auth/middleware.js';
+import { ensureDefaultConfig, ensureSeedCategories } from './services/configService.js';
+import authRoutes from './routes/auth.js';
+import auditRoutes from './routes/audit.js';
+import configRoutes from './routes/config.js';
+import memberRoutes from './routes/members.js';
+import roundRoutes from './routes/rounds.js';
+import scoringRoutes from './routes/scoring.js';
+import ticketRoutes from './routes/tickets.js';
+import { errorHandler } from './routes/helpers.js';
+
+export async function createApp() {
+  assertProductionSafety();
+
+  const db = await getDb();
+  await migrate(db);
+  await ensureDefaultConfig(db);
+  await ensureSeedCategories(db);
+
+  const app = express();
+  app.set('trust proxy', 1); // Azure App Service sits behind a reverse proxy
+  app.use(express.json({ limit: '4mb' }));
+  app.use(cookieParser());
+  app.use(
+    cors({
+      origin: env.publicWebOrigin,
+      credentials: true,
+    }),
+  );
+  app.use(attachMember);
+
+  app.get('/healthz', (_req, res) => res.json({ ok: true, db: db.dialect, auth: env.auth.mode }));
+
+  app.use('/auth', authRoutes);
+  app.use('/api', memberRoutes);
+  app.use('/api', configRoutes);
+  app.use('/api', ticketRoutes);
+  app.use('/api', roundRoutes);
+  app.use('/api', scoringRoutes);
+  app.use('/api', auditRoutes);
+
+  // Single-deployment mode: serve the built React app if it is present.
+  const webDist = path.resolve(env.serverRoot, '..', 'web', 'dist');
+  if (fs.existsSync(webDist)) {
+    app.use(express.static(webDist));
+    app.get(/^(?!\/(api|auth|healthz)).*/, (_req, res) => res.sendFile(path.join(webDist, 'index.html')));
+  }
+
+  app.use(errorHandler);
+  return app;
+}
+
+const isDirectRun = process.argv[1]?.includes('index');
+if (isDirectRun) {
+  const app = await createApp();
+  const server = app.listen(env.port, () => {
+    console.log(`[bis] API listening on :${env.port} (auth=${env.auth.mode}, db=${env.db.driver})`);
+  });
+
+  const shutdown = async () => {
+    server.close();
+    await closeDb();
+    process.exit(0);
+  };
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
+}
