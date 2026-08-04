@@ -15,29 +15,35 @@ Phase 2 JIRA and Microsoft Graph adapters, coded against the real APIs.
 repository → branch `claude/app-requirement-doc-f5ootn`**. Render creates a managed PostgreSQL
 database and the web service, and prompts for a handful of values.
 
-**Only one is required to get in:** `BOOTSTRAP_ADMIN_EMAIL`. Set it to your work email address — the
-app creates you as an admin on first boot, because a fresh database has no members and sign-in
-requires one. Everything else can be left blank and filled in later from the Settings screen.
+**Only one value is required:** `BOOTSTRAP_ADMIN_EMAIL`. Set it to your work email address — the app
+creates you as an admin on first boot, because a fresh database has no members and sign-in needs one.
+Everything else can be left blank and filled in later from the Settings screen.
 
 That gives you the whole application on a real database: create a round, write ticket cards, open it
 for scoring, watch submissions land, see the aggregation, generate the pack, export CSV, finalise, and
 open the anonymised feedback view.
 
-### Two things need credentials only WOSG/IT can issue
+### Signing in
 
-Neither blocks the deployment, and neither needs a code change when they arrive:
+The committee picks their name from a list — the app is internal and everyone knows who they are.
+The coordinator manages that list in Settings; `ALLOW_SELF_REGISTRATION=true` lets people add
+themselves instead, and is off by default because a new scorer's submissions count toward the average
+and the minimum-responses gate.
+
+This is a deliberate departure from §4 of the requirements (Entra ID SSO) — recorded, with what it
+does and does not change, in [`docs/decisions.md`](docs/decisions.md). Moving to SSO later is
+configuration: set `AUTH_MODE=entra` and supply the app registration. The OIDC flow is implemented,
+and a production build refuses to start on `AUTH_MODE=entra` with an incomplete registration, so a
+half-finished switch fails at deploy rather than at someone's login.
+
+### JIRA and email, when you are ready
+
+Neither blocks the deployment, and neither needs a code change:
 
 | | Until it is configured | To switch it on |
 |---|---|---|
-| **Microsoft 365 SSO** | Interim email sign-in. Anyone who knows a committee email can sign in as them, so the UI carries a banner saying exactly that on every page. | Set `AUTH_MODE=entra`, add `ENTRA_TENANT_ID` / `ENTRA_CLIENT_ID` / `ENTRA_CLIENT_SECRET` and `ENTRA_REDIRECT_URI=https://<host>/auth/callback`, then **delete `ALLOW_EMAIL_SIGN_IN`**. |
-| **JIRA import / write-back** | Add tickets manually or by CSV; export results as CSV. | Add `JIRA_BASE_URL` / `JIRA_EMAIL` / `JIRA_API_TOKEN` (service account, not a personal login), then use Settings → JIRA → "Resolve field ids from JIRA". |
-
-Email is a third, smaller one: with `GRAPH_SEND_ENABLED=false` the app composes distribution and
-reminder messages and logs them without sending, so the cadence can be rehearsed before the committee
-starts receiving real mail.
-
-The server refuses to start on `AUTH_MODE=entra` with the registration missing, so a half-finished
-switch fails loudly at deploy rather than quietly at someone's login.
+| **JIRA import / write-back** | Add tickets manually or by CSV; export results as CSV. | Add `JIRA_BASE_URL` / `JIRA_EMAIL` / `JIRA_API_TOKEN` (service account, not a personal login), then Settings → JIRA → "Resolve field ids from JIRA". |
+| **Distribution / reminder email** | Messages are composed and logged, never sent, so the cadence can be rehearsed. | Add the `GRAPH_*` app registration with `Mail.Send`, then set `GRAPH_SEND_ENABLED=true`. |
 
 ### Sample data
 
@@ -59,7 +65,7 @@ Or run the built app on one port, the way it is deployed:
 
 ```bash
 npm run build
-NODE_ENV=production AUTH_MODE=dev ALLOW_EMAIL_SIGN_IN=true ALLOW_SQLITE=true \
+NODE_ENV=production AUTH_MODE=email ALLOW_SQLITE=true \
   DB_DRIVER=sqlite SQLITE_FILE=./data/bis.db SESSION_SECRET=anything \
   BOOTSTRAP_ADMIN_EMAIL=you@example.com PORT=4000 npm start
 ```
@@ -69,31 +75,18 @@ NODE_ENV=production AUTH_MODE=dev ALLOW_EMAIL_SIGN_IN=true ALLOW_SQLITE=true \
 A production build refuses to start when it would be unsafe, and each refusal names its escape hatch:
 
 - **No `SESSION_SECRET`** — always fatal. Nothing overrides it.
-- **Email sign-in** — fatal unless `ALLOW_EMAIL_SIGN_IN=true`, which is the deliberate interim state.
 - **SQLite** — fatal unless `ALLOW_SQLITE=true`.
-- **`AUTH_MODE=entra` without a registration** — always fatal.
+- **`AUTH_MODE=entra` without a registration** — always fatal, so SSO never half-works.
 
-These are three separate switches on purpose. A real instance can run on PostgreSQL with live JIRA and
-no sample data while still using interim sign-in for the days between going live and the Entra
-registration landing.
+Sign-in mode, database and sample data are independent choices, so any combination is available
+without touching code.
 
-## Quick start
+### Sample data locally
 
-```bash
-cd bis-app
-npm install
-npm run seed --workspace server -- --demo   # committee, categories, config + a demo round
-npm run dev:server                          # API on :4000
-npm run dev:web                             # UI on :5173
-```
-
-Open http://localhost:5173 and sign in as `nikita@example.com` (coordinator) or `matt@example.com`
-(committee member). Local sign-in is email-only because `AUTH_MODE=dev`; every deployed environment
-uses Entra ID SSO, and the server refuses to boot in `dev` auth mode when `NODE_ENV=production`.
-
-The demo round is seeded with the worked examples from the requirements, so the dashboard shows
-ECOM-1466 at 43 / 12.8 / ratio 2.69 (Medium), ECOM-1422 at 13 / ratio 1.00 (Low) and ECOM-915 with
-std dev 18.4 (Pending discussion) on first run.
+`npm run seed --workspace server -- --demo` fills a local database with a committee and a round whose
+numbers reproduce the worked examples from the requirements: ECOM-1466 at 43 / 12.8 / ratio 2.69
+(Medium), ECOM-1422 at 13 / ratio 1.00 (Low), ECOM-915 with std dev 18.4 (Pending discussion). Useful
+for seeing the maths without scoring four tickets by hand first.
 
 ### Tests
 
@@ -124,7 +117,7 @@ npm start                          # API serves the built UI from the same origi
 | §11 cadence | `app_config.cadence`, Settings → Cadence |
 | §12.1 JIRA | `integrations/jira.ts`, `services/jiraService.ts` |
 | §12.2 Graph mail | `integrations/graph.ts`, `services/emailService.ts` |
-| §12.3 Entra SSO / Azure | `auth/entra.ts`, `auth/session.ts`, `docker-compose.yml` |
+| §12.3 auth / hosting | `auth/entra.ts`, `auth/session.ts`, `render.yaml`, `docker-compose.yml` (see D1 in `docs/decisions.md`) |
 | §14 audit, RBAC, config-driven, idempotent writes | `services/auditService.ts`, `auth/middleware.ts`, `app_config`, `jira_writebacks` |
 
 A section-by-section trace, including the deliberate decisions, is in

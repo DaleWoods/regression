@@ -484,15 +484,27 @@ legend {
   white-space: nowrap;
 }
 
-.demo-banner {
+.signin-list {
+  list-style: none;
   margin: 0;
-  padding: 0.45rem 1.25rem;
-  background: #fff4d6;
-  border-bottom: 1px solid #e0c877;
-  color: #6b4f00;
-  font-size: 0.86rem;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+.signin-list button {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+.signin-name {
   font-weight: 600;
-  text-align: center;
+}
+.signin-team {
+  font-size: 0.82rem;
+  color: var(--muted);
 }
 
 .login-wrap {

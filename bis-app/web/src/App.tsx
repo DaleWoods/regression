@@ -12,7 +12,6 @@ import { AuditPage } from './pages/AuditPage';
 export function App() {
   const { path, navigate } = useRouter();
   const [member, setMember] = useState<Member | null>(null);
-  const [interimSignIn, setInterimSignIn] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -21,10 +20,6 @@ export function App() {
       .then(({ member }) => setMember(member))
       .catch(() => setMember(null))
       .finally(() => setLoading(false));
-    api
-      .authMode()
-      .then(({ interimSignIn }) => setInterimSignIn(interimSignIn))
-      .catch(() => setInterimSignIn(false));
   }, []);
 
   if (loading) return <main>Loading…</main>;
@@ -64,13 +59,6 @@ export function App() {
           </button>
         </div>
       </header>
-
-      {interimSignIn ? (
-        <p className="demo-banner" role="note">
-          Interim sign-in — Microsoft 365 single sign-on is not configured yet, so anyone who knows a committee email
-          address can sign in as them.
-        </p>
-      ) : null}
 
       <main id="main">
         <Routes path={path} member={member} coordinator={coordinator} />

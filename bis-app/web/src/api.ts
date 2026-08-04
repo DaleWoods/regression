@@ -12,6 +12,14 @@ export interface Member {
   lastLoginAt: string | null;
 }
 
+/** What the sign-in picker shows: no email addresses leave the server. */
+export interface SignInMember {
+  id: string;
+  name: string;
+  team: string;
+  role: Role;
+}
+
 export interface Category {
   id: string;
   position: number;
@@ -195,9 +203,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
-  authMode: () => request<{ mode: 'entra' | 'dev'; interimSignIn: boolean; tenantConfigured: boolean }>('/auth/mode'),
-  devLogin: (email: string) =>
-    request<{ member: Member }>('/auth/dev-login', { method: 'POST', body: JSON.stringify({ email }) }),
+  authMode: () =>
+    request<{ mode: 'entra' | 'email'; selfRegistration: boolean; tenantConfigured: boolean }>('/auth/mode'),
+  signInMembers: () => request<{ members: SignInMember[] }>('/auth/members'),
+  signIn: (payload: { memberId?: string; email?: string; name?: string }) =>
+    request<{ member: Member }>('/auth/sign-in', { method: 'POST', body: JSON.stringify(payload) }),
   logout: () => request<{ ok: boolean; signOutUrl: string | null }>('/auth/logout', { method: 'POST' }),
   me: () => request<{ member: Member }>('/api/me'),
 

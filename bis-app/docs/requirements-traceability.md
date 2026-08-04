@@ -22,9 +22,11 @@ Four roles: `ADMIN`, `COORDINATOR`, `COMMITTEE`, `VIEWER`. Enforced by `requireR
 database on each request, so revoking or downgrading someone takes effect immediately rather than
 when their session token expires.
 
-Entra ID SSO is implemented as an OIDC authorisation-code flow with PKCE (`auth/entra.ts`), verifying
-the id_token against the tenant JWKS. `AUTH_MODE=dev` provides email-only sign-in for local work and
-is refused when `NODE_ENV=production`.
+Sign-in is name/email by decision (D1 in `decisions.md`): the committee picks their name from a list.
+Entra ID SSO is implemented and available - an OIDC authorisation-code flow with PKCE
+(`auth/entra.ts`) verifying the id_token against the tenant JWKS - and is a configuration switch away.
+Identity is therefore self-asserted today: the RBAC rules below still hold, but against a claimed
+identity rather than one Microsoft vouched for.
 
 ## §5 Domain model
 

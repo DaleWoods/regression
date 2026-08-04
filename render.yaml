@@ -5,14 +5,15 @@
 # database and the web service, and prompts for the values marked below.
 #
 # This deploys the REAL application on managed PostgreSQL - every feature live,
-# nothing stubbed. Two things depend on credentials only WOSG/IT can issue, and
-# both can be switched on later without a redeploy of anything else:
+# nothing stubbed.
 #
-#   * Microsoft 365 SSO - until the Entra app registration exists, the instance
-#     uses interim email sign-in (ALLOW_EMAIL_SIGN_IN below). The UI says so
-#     plainly on every page.
-#   * JIRA import / write-back - until the service-account token is set, you add
-#     tickets manually or by CSV and export results as CSV.
+# Sign-in is name/email: the committee picks their name from a list. That suits
+# an internal tool with a known committee, and is a deliberate departure from
+# §4 of the requirements (Entra ID SSO) - see bis-app/docs/decisions.md. Moving
+# to SSO later is configuration, not a rewrite; the switch is at the bottom.
+#
+# JIRA import / write-back goes live when the service-account token is set.
+# Until then you add tickets manually or by CSV and export results as CSV.
 
 databases:
   - name: bis-db
@@ -58,8 +59,8 @@ services:
         value: "true"
 
       # --- First way in --------------------------------------------------
-      # A fresh database has no members, and sign-in requires a provisioned
-      # member. Set this to YOUR work email at the Render prompt: the app
+      # THE ONE VALUE YOU MUST SET. A fresh database has no members, and
+      # sign-in needs one. Put YOUR work email at the Render prompt: the app
       # creates it as an ADMIN on boot, and you add the rest of the committee
       # in Settings. Setting it again later also restores admin rights if they
       # are ever lost.
@@ -69,22 +70,23 @@ services:
         sync: false
 
       # --- Sign-in -------------------------------------------------------
-      # Interim: email-only sign-in, because Entra ID is not registered yet.
-      # Anyone who knows a committee email can sign in as them, so the UI
-      # carries a banner and the server warns on every boot.
-      #
-      # When the Entra app registration exists:
+      # Pick your name from the committee list. The coordinator manages who is
+      # on that list in Settings.
+      - key: AUTH_MODE
+        value: email
+      # Set to "true" if you would rather people add themselves on first visit.
+      # Off by default because a new scorer's submissions count toward the
+      # average and the minimum-responses gate.
+      - key: ALLOW_SELF_REGISTRATION
+        value: "false"
+
+      # To move to Microsoft 365 SSO later:
       #   1. set AUTH_MODE=entra
       #   2. add ENTRA_TENANT_ID / ENTRA_CLIENT_ID / ENTRA_CLIENT_SECRET
       #   3. set ENTRA_REDIRECT_URI to https://<your-host>/auth/callback
       #      (and register that exact URI on the app registration)
-      #   4. DELETE ALLOW_EMAIL_SIGN_IN
       # The server refuses to start on AUTH_MODE=entra with the registration
       # missing, so a half-finished switch fails loudly rather than quietly.
-      - key: AUTH_MODE
-        value: dev
-      - key: ALLOW_EMAIL_SIGN_IN
-        value: "true"
       - key: ENTRA_TENANT_ID
         sync: false
       - key: ENTRA_CLIENT_ID

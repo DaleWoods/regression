@@ -15,7 +15,13 @@ function int(value: string | undefined, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
-export type AuthMode = 'entra' | 'dev';
+/**
+ * `email`  - pick your name from the committee list, or type your address.
+ *            A supported choice for an internal tool with a known committee.
+ * `entra`  - Microsoft 365 single sign-on (§4 of the requirements).
+ * `dev`    - alias of `email`, kept so local .env files keep working.
+ */
+export type AuthMode = 'entra' | 'email' | 'dev';
 export type DbDriver = 'postgres' | 'sqlite';
 
 /**
@@ -39,12 +45,12 @@ export const env = {
    */
 
   /**
-   * Permits email-only sign-in in a production build - the interim route in
-   * before Entra ID SSO is configured. Anyone who knows a member's email
-   * address can sign in as them, so this is banner-marked in the UI and
-   * warned about on every boot. Remove it the moment SSO works.
+   * In `email` mode, lets someone not yet on the committee sign themselves in
+   * and be added as a scorer. Off by default: a new scorer's submissions count
+   * toward the average and the minimum-responses gate, so who is on the
+   * committee is a coordinator's decision, not a side effect of visiting a URL.
    */
-  allowEmailSignIn: bool(process.env.ALLOW_EMAIL_SIGN_IN, false),
+  allowSelfRegistration: bool(process.env.ALLOW_SELF_REGISTRATION, false),
 
   /** Permits a SQLite file in a production build, instead of PostgreSQL. */
   allowSqlite: bool(process.env.ALLOW_SQLITE, false),
@@ -111,6 +117,11 @@ export const env = {
   serverRoot,
 };
 
+/** True for the simple name/email sign-in, whichever alias configured it. */
+export function isEmailSignIn(): boolean {
+  return env.auth.mode === 'email' || env.auth.mode === 'dev';
+}
+
 export function assertProductionSafety(): void {
   if (env.nodeEnv !== 'production') return;
 
@@ -120,11 +131,6 @@ export function assertProductionSafety(): void {
   // else's account. Fatal in every production build, whatever else is set.
   if (env.auth.sessionSecret.startsWith('dev-only')) problems.push('SESSION_SECRET must be set');
 
-  if (env.auth.mode === 'dev' && !env.allowEmailSignIn) {
-    problems.push(
-      'AUTH_MODE=dev is not permitted in production. Configure Entra ID SSO, or set ALLOW_EMAIL_SIGN_IN=true to accept interim email sign-in.',
-    );
-  }
   if (env.db.driver !== 'postgres' && !env.allowSqlite) {
     problems.push('production should run on PostgreSQL. Set DATABASE_URL, or set ALLOW_SQLITE=true to accept a SQLite file.');
   }
@@ -136,18 +142,11 @@ export function assertProductionSafety(): void {
 
   if (problems.length) throw new Error(`Unsafe production configuration:\n - ${problems.join('\n - ')}`);
 
-  if (env.allowEmailSignIn && env.auth.mode === 'dev') {
-    console.warn(
-      [
-        '',
-        '  ******************************************************************',
-        '  *  Interim email sign-in is enabled.                             *',
-        '  *  Anyone who knows a member email can sign in as them.          *',
-        '  *  Remove ALLOW_EMAIL_SIGN_IN as soon as Entra ID SSO is live.   *',
-        '  ******************************************************************',
-        '',
-      ].join('\n'),
-    );
+  if (isEmailSignIn()) {
+    // Stated once at boot, not nagged about: identity is self-asserted, so the
+    // audit trail records who the session claims to be. A deliberate choice for
+    // an internal tool with a known committee (departs from §4).
+    console.log('[bis] sign-in mode: name/email. Set AUTH_MODE=entra with an app registration for M365 SSO.');
   }
   if (env.db.driver !== 'postgres') {
     console.warn('[bis] running on SQLite in production - move to PostgreSQL before this holds data you cannot lose.');

@@ -1,23 +1,40 @@
 import { Router } from 'express';
-import { env } from '../config/env.js';
+import { env, isEmailSignIn } from '../config/env.js';
 import { getDb } from '../db/index.js';
 import { audit } from '../services/auditService.js';
-import { getMemberByEmail, recordLogin, saveMember } from '../services/memberService.js';
+import { getMember, getMemberByEmail, listMembers, recordLogin, saveMember } from '../services/memberService.js';
 import { AuthRequestState, buildAuthorizeUrl, createAuthRequestState, exchangeCode, logoutUrl } from '../auth/entra.js';
 import { clearSession, issueSession } from '../auth/session.js';
+import { asyncHandler } from './helpers.js';
 
 const router = Router();
 const STATE_COOKIE = 'bis_auth_state';
 
 router.get('/mode', (_req, res) => {
   res.json({
-    mode: env.auth.mode,
-    // True when a deployed instance is using interim email sign-in rather
-    // than SSO - the UI says so plainly rather than looking like SSO.
-    interimSignIn: env.auth.mode === 'dev' && env.nodeEnv === 'production',
+    mode: isEmailSignIn() ? 'email' : 'entra',
+    selfRegistration: env.allowSelfRegistration,
     tenantConfigured: Boolean(env.auth.entra.tenantId && env.auth.entra.clientId),
   });
 });
+
+/**
+ * The committee, for the "who are you?" picker. Names and teams only - no
+ * email addresses, so an internal URL does not hand out a staff directory.
+ * Sign-in then happens by member id.
+ */
+router.get(
+  '/members',
+  asyncHandler(async (_req, res) => {
+    if (!isEmailSignIn()) {
+      res.json({ members: [] });
+      return;
+    }
+    const db = await getDb();
+    const members = await listMembers(db, false);
+    res.json({ members: members.map((m) => ({ id: m.id, name: m.name, team: m.team, role: m.role })) });
+  }),
+);
 
 /** Entra ID SSO - no separate login (§4). */
 router.get('/login', async (req, res) => {
@@ -75,35 +92,51 @@ router.get('/callback', async (req, res) => {
 });
 
 /**
- * Local development sign-in. Refused unless AUTH_MODE=dev, and production boot
- * refuses AUTH_MODE=dev outright (see assertProductionSafety).
+ * Name/email sign-in (AUTH_MODE=email). Identity is self-asserted - suitable
+ * for an internal tool with a known committee, and a documented departure from
+ * §4. Sign in by member id (the picker) or by email address.
  */
-router.post('/dev-login', async (req, res) => {
-  if (env.auth.mode !== 'dev') {
-    res.status(404).json({ error: 'Not found' });
-    return;
-  }
-  const email = String(req.body?.email ?? '').trim();
-  if (!email) {
-    res.status(400).json({ error: 'email is required' });
-    return;
-  }
+// Mounted on both /sign-in and the older /dev-login path.
+const signIn = asyncHandler(async (req, res) => {
+  {
+    if (!isEmailSignIn()) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
 
-  const db = await getDb();
-  let member = await getMemberByEmail(db, email);
-  if (!member && String(req.body?.create) === 'true') {
-    member = await saveMember(db, { name: String(req.body?.name ?? email), email, role: 'COMMITTEE' });
-  }
-  if (!member || !member.active) {
-    res.status(403).json({ error: 'No active committee member with that email' });
-    return;
-  }
+    const db = await getDb();
+    const memberId = String(req.body?.memberId ?? '').trim();
+    const email = String(req.body?.email ?? '').trim();
+    const name = String(req.body?.name ?? '').trim();
 
-  await recordLogin(db, member.id);
-  await issueSession(res, { memberId: member.id, email: member.email, name: member.name, role: member.role });
-  await audit(db, { id: member.id, email: member.email }, 'auth.login', 'member', member.id, { method: 'dev' });
-  res.json({ member });
+    let member = memberId ? await getMember(db, memberId) : email ? await getMemberByEmail(db, email) : undefined;
+
+    // Someone new can add themselves only when self-registration is on - their
+    // scores count toward the aggregates, so the committee is normally the
+    // coordinator's list.
+    if (!member && email && env.allowSelfRegistration) {
+      member = await saveMember(db, { name: name || email.split('@')[0], email, role: 'COMMITTEE' });
+      await audit(db, { id: member.id, email: member.email }, 'member.self-register', 'member', member.id, {});
+    }
+
+    if (!member || !member.active) {
+      res.status(403).json({
+        error: env.allowSelfRegistration
+          ? 'Enter your name and email address to join the committee'
+          : 'You are not on the committee yet — ask the coordinator to add you',
+      });
+      return;
+    }
+
+    await recordLogin(db, member.id);
+    await issueSession(res, { memberId: member.id, email: member.email, name: member.name, role: member.role });
+    await audit(db, { id: member.id, email: member.email }, 'auth.login', 'member', member.id, { method: 'email' });
+    res.json({ member });
+  }
 });
+
+router.post('/sign-in', signIn);
+router.post('/dev-login', signIn);
 
 router.post('/logout', async (req, res) => {
   if (req.member) {
