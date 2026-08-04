@@ -12,6 +12,7 @@ import { AuditPage } from './pages/AuditPage';
 export function App() {
   const { path, navigate } = useRouter();
   const [member, setMember] = useState<Member | null>(null);
+  const [demoMode, setDemoMode] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -20,6 +21,10 @@ export function App() {
       .then(({ member }) => setMember(member))
       .catch(() => setMember(null))
       .finally(() => setLoading(false));
+    api
+      .authMode()
+      .then(({ demoMode }) => setDemoMode(demoMode))
+      .catch(() => setDemoMode(false));
   }, []);
 
   if (loading) return <main>Loading…</main>;
@@ -59,6 +64,12 @@ export function App() {
           </button>
         </div>
       </header>
+
+      {demoMode ? (
+        <p className="demo-banner" role="note">
+          Demo instance — sample data, email-only sign-in. Not for real scoring.
+        </p>
+      ) : null}
 
       <main id="main">
         <Routes path={path} member={member} coordinator={coordinator} />

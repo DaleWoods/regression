@@ -1,0 +1,100 @@
+# Render.com blueprint for the Business Impact Scoring app (bis-app/).
+# In the Render dashboard: New → Blueprint → pick this repository, choose the
+# claude/app-requirement-doc-f5ootn branch. Render reads this file and deploys.
+#
+# As written this stands up a DEMO instance: sample data, email-only sign-in,
+# SQLite on a mounted disk. That is what you want for a walkthrough. See
+# bis-app/README.md ("Going beyond the demo") for the switch to Entra ID SSO
+# and PostgreSQL before any real scoring happens.
+services:
+  - type: web
+    name: bis-app
+    runtime: node
+    # The app lives in a subdirectory of this repo; everything below is
+    # relative to it.
+    rootDir: bis-app
+    # starter = 512MB, which is plenty: no browser, no image processing.
+    # The PPTX/PDF pack is generated in-process from text.
+    plan: starter
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /healthz
+    disk:
+      # Keeps the SQLite database across deploys and restarts. Drop this block
+      # when you move to PostgreSQL.
+      name: bis-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+
+      # --- Demo settings -------------------------------------------------
+      # DEMO_MODE permits email-only sign-in and SQLite in a production build,
+      # and seeds the committee plus a worked-example round on first boot.
+      # The server logs a warning and the UI carries a banner while it is on.
+      - key: DEMO_MODE
+        value: "true"
+      - key: AUTH_MODE
+        value: dev
+      - key: DB_DRIVER
+        value: sqlite
+      - key: SQLITE_FILE
+        value: /data/bis.db
+
+      # Session cookies are signed with this. Render generates it once and
+      # keeps it; it never appears in git.
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+
+      # Render injects PORT and RENDER_EXTERNAL_URL; the app reads both, so
+      # links in generated email point at the deployed host automatically.
+
+      # --- Optional integrations -----------------------------------------
+      # Set these in the Render dashboard when you want live JIRA import and
+      # write-back. Left blank, the app runs fine and reports them as not
+      # configured. Use a service account token, not a personal one.
+      - key: JIRA_BASE_URL
+        sync: false
+      - key: JIRA_EMAIL
+        sync: false
+      - key: JIRA_API_TOKEN
+        sync: false
+
+      # Microsoft Graph, for distribution and reminder email. With
+      # GRAPH_SEND_ENABLED=false messages are composed and logged but never
+      # sent, so the cadence can be rehearsed safely.
+      - key: GRAPH_SEND_ENABLED
+        value: "false"
+      - key: GRAPH_TENANT_ID
+        sync: false
+      - key: GRAPH_CLIENT_ID
+        sync: false
+      - key: GRAPH_CLIENT_SECRET
+        sync: false
+      - key: GRAPH_SENDER_UPN
+        sync: false
+
+# --- Production shape (for reference) ------------------------------------
+# When this stops being a demo:
+#   1. Remove the disk block and the DEMO_MODE / AUTH_MODE / DB_DRIVER /
+#      SQLITE_FILE variables above.
+#   2. Uncomment the database below and add:
+#        - key: DB_DRIVER          value: postgres
+#        - key: DATABASE_SSL       value: "true"
+#        - key: DATABASE_URL       fromDatabase: { name: bis-db, property: connectionString }
+#        - key: AUTH_MODE          value: entra
+#        - key: ENTRA_TENANT_ID / ENTRA_CLIENT_ID / ENTRA_CLIENT_SECRET  (sync: false)
+#        - key: ENTRA_REDIRECT_URI value: https://<your-host>/auth/callback
+#   3. Seed the real committee: SEED_ON_BOOT=base on one deploy, then remove it,
+#      or add the members in Settings.
+#
+# databases:
+#   - name: bis-db
+#     databaseName: bis
+#     user: bis
+#     plan: basic-256mb

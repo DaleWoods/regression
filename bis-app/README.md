@@ -9,6 +9,48 @@ Phase 2 JIRA and Microsoft Graph adapters, coded against the real APIs.
 
 ---
 
+## See it in action
+
+### Hosted on Render (same pattern as qa-scanner)
+
+`render.yaml` sits at the repository root. In the Render dashboard: **New → Blueprint → this
+repository → branch `claude/app-requirement-doc-f5ootn`**. Render reads the blueprint, builds and
+deploys; nothing else needs configuring for a walkthrough.
+
+What you get is a **demo instance**: `DEMO_MODE=true` seeds the committee and a round whose numbers
+reproduce the requirements' worked examples on first boot, sign-in is a click on a role, and the data
+lives in SQLite on a 1GB mounted disk (so it survives restarts and redeploys). The server logs a
+warning on every boot and the UI carries a banner, so nobody mistakes it for the real system.
+
+The landing page offers three roles — coordinator, committee member, read-only viewer — which is the
+quickest way to see that impartiality actually holds: sign in as Matt, note you can only see your own
+scores; sign in as Nikita, note you can see everyone's.
+
+### Locally
+
+```bash
+cd bis-app
+npm install
+npm run seed --workspace server -- --demo
+npm run dev:server     # API on :4000
+npm run dev:web        # UI on :5173  →  open http://localhost:5173
+```
+
+Or run the built app exactly as Render does, on one port:
+
+```bash
+npm run build
+DEMO_MODE=true NODE_ENV=production AUTH_MODE=dev DB_DRIVER=sqlite \
+  SQLITE_FILE=./data/bis.db SESSION_SECRET=anything PORT=4000 npm start
+```
+
+### Going beyond the demo
+
+Before any real scoring happens, turn `DEMO_MODE` off and set `AUTH_MODE=entra` with the `ENTRA_*`
+variables, plus `DB_DRIVER=postgres` and a `DATABASE_URL`. The bottom of `render.yaml` spells out that
+switch, including the managed PostgreSQL block to uncomment. With `DEMO_MODE` off, a production build
+refuses to start on email-only auth or on SQLite — that guard is the point, so leave it in place.
+
 ## Quick start
 
 ```bash

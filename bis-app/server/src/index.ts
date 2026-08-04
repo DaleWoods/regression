@@ -8,6 +8,7 @@ import { closeDb, getDb } from './db/index.js';
 import { migrate } from './db/migrate.js';
 import { attachMember } from './auth/middleware.js';
 import { ensureDefaultConfig, ensureSeedCategories } from './services/configService.js';
+import { seedBase, seedDemo } from './db/seed.js';
 import authRoutes from './routes/auth.js';
 import auditRoutes from './routes/audit.js';
 import configRoutes from './routes/config.js';
@@ -24,6 +25,17 @@ export async function createApp() {
   await migrate(db);
   await ensureDefaultConfig(db);
   await ensureSeedCategories(db);
+
+  if (env.seedOnBoot) {
+    await seedBase(db);
+    // Only on a genuinely empty instance, so a restart never duplicates or
+    // disturbs a round someone is part-way through.
+    const rounds = await db.get<{ count: number }>('SELECT COUNT(*) AS count FROM rounds');
+    if (env.seedOnBoot === 'demo' && Number(rounds?.count ?? 0) === 0) {
+      const roundId = await seedDemo(db);
+      console.log(`[bis] seeded demo round ${roundId}`);
+    }
+  }
 
   const app = express();
   app.set('trust proxy', 1); // Azure App Service sits behind a reverse proxy

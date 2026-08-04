@@ -26,8 +26,23 @@ export type DbDriver = 'postgres' | 'sqlite';
 export const env = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
   port: int(process.env.PORT, 4000),
-  publicWebOrigin: process.env.PUBLIC_WEB_ORIGIN ?? 'http://localhost:5173',
-  publicApiOrigin: process.env.PUBLIC_API_ORIGIN ?? 'http://localhost:4000',
+  // RENDER_EXTERNAL_URL is injected by Render, so email links and the OIDC
+  // redirect point at the deployed host without hard-coding it.
+  publicWebOrigin: process.env.PUBLIC_WEB_ORIGIN ?? process.env.RENDER_EXTERNAL_URL ?? 'http://localhost:5173',
+  publicApiOrigin: process.env.PUBLIC_API_ORIGIN ?? process.env.RENDER_EXTERNAL_URL ?? 'http://localhost:4000',
+
+  /**
+   * Demo deployment switch. Permits email-only sign-in and a SQLite file in a
+   * production build, and seeds sample data on first boot, so the app can be
+   * hosted for a walkthrough before Entra ID and PostgreSQL are wired up.
+   * It is loudly flagged in the server log and banner-marked in the UI.
+   * Never turn this on for a deployment holding real scoring data.
+   */
+  demoMode: bool(process.env.DEMO_MODE, false),
+  /** '' | 'base' (committee + config) | 'demo' (also a worked-example round). */
+  get seedOnBoot(): string {
+    return process.env.SEED_ON_BOOT ?? (env.demoMode ? 'demo' : '');
+  },
 
   db: {
     driver: (process.env.DB_DRIVER ?? (process.env.DATABASE_URL ? 'postgres' : 'sqlite')) as DbDriver,
@@ -82,9 +97,29 @@ export const env = {
 
 export function assertProductionSafety(): void {
   if (env.nodeEnv !== 'production') return;
+
   const problems: string[] = [];
-  if (env.auth.mode === 'dev') problems.push('AUTH_MODE=dev is not permitted in production');
+  // A signed session cookie is what stands between a stranger and someone
+  // else's account, so this is fatal in every production build - demo or not.
   if (env.auth.sessionSecret.startsWith('dev-only')) problems.push('SESSION_SECRET must be set');
-  if (env.db.driver !== 'postgres') problems.push('production must run on PostgreSQL (DB_DRIVER=postgres)');
+
+  if (env.demoMode) {
+    console.warn(
+      [
+        '',
+        '  ********************************************************************',
+        '  *  DEMO_MODE is on.                                                *',
+        '  *  Anyone who knows a seeded email address can sign in as them,    *',
+        '  *  and data lives in a SQLite file rather than PostgreSQL.         *',
+        '  *  Fine for a walkthrough. Never for real scoring data.            *',
+        '  ********************************************************************',
+        '',
+      ].join('\n'),
+    );
+  } else {
+    if (env.auth.mode === 'dev') problems.push('AUTH_MODE=dev is not permitted in production (set DEMO_MODE=true if this is a demo)');
+    if (env.db.driver !== 'postgres') problems.push('production must run on PostgreSQL (DB_DRIVER=postgres)');
+  }
+
   if (problems.length) throw new Error(`Unsafe production configuration:\n - ${problems.join('\n - ')}`);
 }

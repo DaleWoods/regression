@@ -484,6 +484,17 @@ legend {
   white-space: nowrap;
 }
 
+.demo-banner {
+  margin: 0;
+  padding: 0.45rem 1.25rem;
+  background: #fff4d6;
+  border-bottom: 1px solid #e0c877;
+  color: #6b4f00;
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-align: center;
+}
+
 .login-wrap {
   max-width: 420px;
   margin: 6vh auto;

@@ -10,7 +10,11 @@ const router = Router();
 const STATE_COOKIE = 'bis_auth_state';
 
 router.get('/mode', (_req, res) => {
-  res.json({ mode: env.auth.mode, tenantConfigured: Boolean(env.auth.entra.tenantId && env.auth.entra.clientId) });
+  res.json({
+    mode: env.auth.mode,
+    demoMode: env.demoMode,
+    tenantConfigured: Boolean(env.auth.entra.tenantId && env.auth.entra.clientId),
+  });
 });
 
 /** Entra ID SSO - no separate login (§4). */
