@@ -253,7 +253,14 @@ async function main() {
     });
   }
 
-  console.log("Seeded users, vendors, instances, people, mappings and DPD accounts.");
+  // Flags are derived state. Compute them so hand-seeded rows behave exactly
+  // like imported ones — the DPD accounts should read as unverifiable
+  // immediately, not only after the first import.
+  const { refreshAllFlags } = await import("../src/lib/flags");
+  const flagged = await refreshAllFlags();
+
+  console.log(`Seeded users, vendors, instances, people, mappings and DPD accounts.`);
+  console.log(`Computed flags on ${flagged} account(s).`);
   console.log("Sign in with admin@wosg.example / owner@wosg.example / auditor@wosg.example");
   console.log("Password for all three: Password123!");
 }
