@@ -46,6 +46,16 @@ cp .env.example .env         # then fill in the values — see below
 Open `.env` and supply, at minimum, the three storefront base URLs. Every key is
 documented in `.env.example`. **Never commit `.env`.**
 
+> **All three URLs are required, even to run one site.** `playwright.config.ts`
+> resolves every site config when it loads, so that a bad URL is caught before
+> any test is collected. If you only have one confirmed hostname to hand, point
+> the other two at the same value to get moving — just remember they are wrong
+> before you trust a cross-site result.
+
+**SAP credentials are not needed for storefront work.** They are only demanded
+when you ask for the ERP project explicitly (`npm run test:erp`). Everything
+else — including UI Mode — runs without them.
+
 Verify the setup:
 
 ```bash

@@ -52,18 +52,20 @@ function projectsSelectedOnCommandLine(): string[] {
 }
 
 /**
- * Whether the ERP project will actually run.
+ * Whether to demand SAP credentials up front.
  *
- * With no `--project` filter every configured project runs, so the ERP project
- * is included; otherwise it is included only when named explicitly.
+ * Only when the ERP project is named EXPLICITLY (`--project=erp`, i.e.
+ * `npm run test:erp`). An unfiltered run — notably UI Mode, which passes no
+ * `--project` at all — must not be blocked behind credentials the tester may
+ * not have: it would fail before showing a single test.
+ *
+ * ERP tests in an unfiltered run are still safe. The `erpConfig` fixture calls
+ * `getErpConfig()`, which enforces both the missing-variable check and the
+ * production guard at the moment an ERP test actually starts. The trade-off is
+ * only WHEN the failure surfaces, never WHETHER it does.
  */
-function erpProjectSelected(config: FullConfig): boolean {
-  const selected = projectsSelectedOnCommandLine();
-
-  if (selected.length === 0) {
-    return config.projects.some((project) => project.name === 'erp');
-  }
-  return selected.includes('erp');
+function erpCredentialsRequiredUpFront(_config: FullConfig): boolean {
+  return projectsSelectedOnCommandLine().includes('erp');
 }
 
 // Synchronous by design: every check here is a pure config read, and keeping it
@@ -86,7 +88,7 @@ export default function globalSetup(config: FullConfig): void {
     // contributor to hold SAP credentials, which they should not need.
     const erpHost = process.env['ERP_BASE_URL'];
 
-    if (erpProjectSelected(config)) {
+    if (erpCredentialsRequiredUpFront(config)) {
       requireAll(
         ['ERP_BASE_URL', 'ERP_CLIENT', 'ERP_USER', 'ERP_PASSWORD'],
         'the ERP (SAP Webgui) project'
