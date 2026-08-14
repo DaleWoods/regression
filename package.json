@@ -1,0 +1,51 @@
+{
+  "name": "wosg-uk-playwright",
+  "version": "1.0.0",
+  "private": true,
+  "description": "WOSG UK Playwright automation framework — Goldsmiths, Mappin & Webb, Watches of Switzerland (Spartacus) + SAP Webgui ERP",
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "test": "playwright test --project=goldsmiths --project=mappin-webb --project=wos",
+    "test:goldsmiths": "playwright test --project=goldsmiths",
+    "test:mappin-webb": "playwright test --project=mappin-webb",
+    "test:wos": "playwright test --project=wos",
+    "test:erp": "playwright test --project=erp",
+    "test:smoke": "playwright test --grep @smoke --project=goldsmiths --project=mappin-webb --project=wos",
+    "test:regression": "playwright test --grep @regression --project=goldsmiths --project=mappin-webb --project=wos",
+    "test:mobile": "playwright test --project=goldsmiths-mobile --project=mappin-webb-mobile --project=wos-mobile",
+    "test:data-check": "playwright test --grep @data-check",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "test:browserstack": "npx browserstack-node-sdk playwright test",
+    "report": "playwright show-report",
+    "trace": "playwright show-trace",
+    "codegen": "playwright codegen",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "verify": "npm run typecheck && npm run lint && npm run format:check",
+    "task:dispatch-order": "tsx scripts/tasks/dispatch-order.ts",
+    "task:move-stock": "tsx scripts/tasks/move-stock.ts",
+    "prepare:browsers": "playwright install --with-deps chromium webkit"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^26.2.0",
+    "browserstack-node-sdk": "^1.65.7",
+    "dotenv": "^17.4.2",
+    "eslint": "^9.39.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-playwright": "^2.11.0",
+    "prettier": "^3.9.6",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.67.0"
+  }
+}

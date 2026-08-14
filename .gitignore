@@ -1,43 +1,49 @@
 # =========================
-# Java
+# Node
 # =========================
-*.class
-*.log
-*.ctxt
-hs_err_pid*
+node_modules/
+npm-debug.log*
+.npm/
+
 # =========================
-# Gradle
+# Playwright
 # =========================
-.gradle/
-build/
-!gradle/wrapper/gradle-wrapper.jar
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+*.zip
+
 # =========================
-# Eclipse
+# Run artefacts (created accounts/orders manifest — see §8 cleanup)
 # =========================
-.classpath
-.project
-.settings/
-bin/
+/artifacts/
+
+# =========================
+# BrowserStack
+# =========================
+/log/
+local.log
+
+# =========================
+# Environment / secrets — NEVER commit .env
+# =========================
+.env
+.env.*
+!.env.example
+
 # =========================
 # IDEs
 # =========================
 .idea/
-.vscode/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
 *.iml
+
 # =========================
 # OS
 # =========================
 .DS_Store
 Thumbs.db
-# =========================
-# Test artefacts / reports
-# =========================
-reports/
-test-output/
-screenshots/
-downloads/
-# =========================
-# Environment / secrets
-# =========================
-.env
-*.local

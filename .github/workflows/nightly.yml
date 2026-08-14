@@ -1,0 +1,111 @@
+# =============================================================================
+# Nightly regression (spec §12)
+#
+# Full @regression across all three sites, plus the @data-check suite so a
+# stale fixed product is caught before it wastes a tester's morning.
+# =============================================================================
+name: Nightly regression
+
+on:
+  schedule:
+    # 02:00 UTC — after any overnight UAT deployment, before the UK working day.
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      site:
+        description: 'Limit to one site (leave blank for all three)'
+        required: false
+        type: choice
+        options: ['', goldsmiths, mappin-webb, wos]
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    name: Regression — ${{ matrix.site }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    strategy:
+      # One site failing must not cancel the other two — the whole point of the
+      # nightly run is to learn the state of all three.
+      fail-fast: false
+      matrix:
+        site: [goldsmiths, mappin-webb, wos]
+
+    env:
+      TEST_ENV: uat
+      GOLDSMITHS_BASE_URL_UAT: ${{ secrets.GOLDSMITHS_BASE_URL_UAT }}
+      MAPPIN_WEBB_BASE_URL_UAT: ${{ secrets.MAPPIN_WEBB_BASE_URL_UAT }}
+      WOS_BASE_URL_UAT: ${{ secrets.WOS_BASE_URL_UAT }}
+      TEST_USER_EMAIL_DOMAIN: ${{ secrets.TEST_USER_EMAIL_DOMAIN }}
+      TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
+      PAYMENT_CARD_NUMBER: ${{ secrets.PAYMENT_CARD_NUMBER }}
+      PAYMENT_CARD_EXPIRY: ${{ secrets.PAYMENT_CARD_EXPIRY }}
+      PAYMENT_CARD_CVC: ${{ secrets.PAYMENT_CARD_CVC }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Skip site not selected
+        if: ${{ github.event.inputs.site != '' && github.event.inputs.site != matrix.site }}
+        run: echo "SKIP_SITE=true" >> "$GITHUB_ENV"
+
+      # `@wip` is excluded from all CI runs (spec §10).
+      - name: Run regression suite
+        if: ${{ env.SKIP_SITE != 'true' }}
+        run: npx playwright test --project=${{ matrix.site }} --grep "@regression|@data-check" --grep-invert @wip
+
+      - name: Upload HTML report
+        if: ${{ !cancelled() && env.SKIP_SITE != 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-report-${{ matrix.site }}-${{ github.run_number }}
+          path: playwright-report/
+          retention-days: 30
+
+      - name: Upload traces
+        if: ${{ failure() && env.SKIP_SITE != 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-traces-${{ matrix.site }}-${{ github.run_number }}
+          path: test-results/
+          retention-days: 30
+
+      - name: Upload created-data manifest
+        if: ${{ !cancelled() && env.SKIP_SITE != 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-created-data-${{ matrix.site }}-${{ github.run_number }}
+          path: artifacts/
+          retention-days: 30
+          if-no-files-found: ignore
+
+  notify:
+    name: Notify on failure
+    runs-on: ubuntu-latest
+    needs: regression
+    if: ${{ failure() }}
+
+    steps:
+      # ⚠️ OPEN ITEM (§15): confirm the failure notification target — Slack
+      # channel or email distribution list. Until that is decided this step
+      # deliberately only annotates the run, so the workflow is complete and
+      # correct without silently pretending to notify anyone.
+      - name: Record failure
+        run: |
+          echo "::warning title=Nightly regression failed::One or more sites failed. \
+          Notification target is still an open item (spec §15) — add the Slack webhook \
+          or email step here once confirmed."

@@ -1,0 +1,76 @@
+# =============================================================================
+# BrowserStack Automate — Playwright SDK configuration (spec §11)
+# =============================================================================
+# OPT-IN ONLY. Local and CI runs use installed browsers; BrowserStack runs are
+# started explicitly with:
+#
+#   npm run test:browserstack
+#
+# Credentials come from environment variables — never commit them.
+# =============================================================================
+
+userName: ${BROWSERSTACK_USERNAME}
+accessKey: ${BROWSERSTACK_ACCESS_KEY}
+
+# Build and project names are taken from CI metadata so a result in the
+# BrowserStack dashboard can be traced back to a branch and run (spec §11).
+projectName: WOSG UK Playwright
+buildName: ${GITHUB_REF_NAME:-local}
+buildIdentifier: '#${GITHUB_RUN_NUMBER:-local} ${GITHUB_SHA:-manual}'
+
+# -----------------------------------------------------------------------------
+# Device matrix
+#
+# ⚠️ OPEN ITEM (§15): confirm the exact device list with the team before this is
+# treated as final. The set below matches the spec's stated shape — two iOS,
+# two Android, plus desktop Safari — using current-generation devices.
+# -----------------------------------------------------------------------------
+platforms:
+  # --- iOS ---
+  - os: ios
+    osVersion: 17
+    deviceName: iPhone 15 Pro
+    browserName: safari
+    realMobile: true
+
+  - os: ios
+    osVersion: 16
+    deviceName: iPhone 14
+    browserName: safari
+    realMobile: true
+
+  # --- Android ---
+  - os: android
+    osVersion: 14.0
+    deviceName: Samsung Galaxy S24
+    browserName: chrome
+    realMobile: true
+
+  - os: android
+    osVersion: 13.0
+    deviceName: Google Pixel 7
+    browserName: chrome
+    realMobile: true
+
+  # --- Desktop Safari ---
+  - os: OS X
+    osVersion: Sonoma
+    browserName: playwright-webkit
+
+# Parallel sessions. Keep at or below the subscription's concurrency limit,
+# otherwise sessions queue and the run appears to hang.
+parallelsPerPlatform: 1
+
+browserstackLocal: false
+
+# Richer debugging artefacts — worth the overhead on an opt-in run.
+debug: true
+networkLogs: true
+consoleLogs: errors
+video: true
+
+# The ERP project must NEVER run on BrowserStack: the SAP QA host is internal,
+# and a remote session would either fail to reach it or require tunnelling into
+# a system the §5 guard exists to protect.
+exclude:
+  - erp

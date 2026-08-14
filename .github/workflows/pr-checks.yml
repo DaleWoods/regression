@@ -1,0 +1,108 @@
+# =============================================================================
+# PR checks (spec §12)
+#
+# Must pass before merge. Deliberately fast: typecheck, lint, format, then
+# @smoke against ONE site (Goldsmiths) on Chromium. The full cross-site
+# regression is the nightly job's work, not a PR gate.
+# =============================================================================
+name: PR checks
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# A new push to the same PR cancels the in-flight run — no point paying for a
+# result nobody will read.
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  static-checks:
+    name: Typecheck, lint and format
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Check formatting
+        run: npm run format:check
+
+  smoke:
+    name: Smoke — Goldsmiths / Chromium
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # No point burning a browser run if the code does not compile.
+    needs: static-checks
+
+    env:
+      TEST_ENV: uat
+      GOLDSMITHS_BASE_URL_UAT: ${{ secrets.GOLDSMITHS_BASE_URL_UAT }}
+      MAPPIN_WEBB_BASE_URL_UAT: ${{ secrets.MAPPIN_WEBB_BASE_URL_UAT }}
+      WOS_BASE_URL_UAT: ${{ secrets.WOS_BASE_URL_UAT }}
+      TEST_USER_EMAIL_DOMAIN: ${{ secrets.TEST_USER_EMAIL_DOMAIN }}
+      TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      # `@wip` is excluded from all CI runs (spec §10).
+      - name: Run smoke tests
+        run: npx playwright test --project=goldsmiths --grep @smoke --grep-invert @wip
+
+      - name: Upload HTML report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-pr-${{ github.run_number }}
+          path: playwright-report/
+          retention-days: 14
+
+      # Traces are the primary debugging tool for a CI failure (spec §2).
+      - name: Upload traces and screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces-pr-${{ github.run_number }}
+          path: test-results/
+          retention-days: 14
+
+      # Makes UAT data build-up visible even without automated cleanup (spec §8).
+      - name: Upload created-data manifest
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: created-data-pr-${{ github.run_number }}
+          path: artifacts/
+          retention-days: 30
+          if-no-files-found: ignore
