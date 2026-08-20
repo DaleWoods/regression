@@ -33,7 +33,11 @@ export function App() {
         Skip to content
       </a>
       <header className="app-header">
-        <span className="brand">Business Impact Scoring</span>
+        <span className="brand">
+          <span className="brand-mark">WOSG</span>
+          <span className="brand-divider" aria-hidden="true" />
+          <span className="brand-name">Business Impact Scoring</span>
+        </span>
         <nav aria-label="Main">
           <Link to="/">Score</Link>
           <Link to="/rounds">Rounds</Link>
