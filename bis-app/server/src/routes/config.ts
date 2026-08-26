@@ -74,6 +74,7 @@ const cadenceSchema = z.object({
   reminderHoursBeforeCutOff: z.array(z.number().min(0)).optional(),
   escalationHoursBeforeCutOff: z.number().min(0).nullable().optional(),
   timezone: z.string().optional(),
+  automationEnabled: z.boolean().optional(),
 });
 
 const jiraSchema = z.object({

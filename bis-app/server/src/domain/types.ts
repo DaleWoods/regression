@@ -102,6 +102,8 @@ export interface CadenceConfig {
   reminderHoursBeforeCutOff: number[];
   escalationHoursBeforeCutOff: number | null;
   timezone: string;
+  /** Off by default: a fresh deployment shouldn't start emailing the committee on its own. */
+  automationEnabled: boolean;
 }
 
 export interface JiraConfig {
@@ -146,6 +148,7 @@ export const DEFAULT_CADENCE_CONFIG: CadenceConfig = {
   reminderHoursBeforeCutOff: [48, 24, 4],
   escalationHoursBeforeCutOff: 2,
   timezone: 'Europe/London',
+  automationEnabled: false,
 };
 
 export const DEFAULT_JIRA_CONFIG: JiraConfig = {

@@ -268,6 +268,7 @@ export function SettingsPage() {
                   .split(',')
                   .map((value) => Number(value.trim()))
                   .filter((value) => Number.isFinite(value)),
+                automationEnabled: form.get('automationEnabled') === 'on',
               },
               'Cadence',
             );
@@ -307,7 +308,14 @@ export function SettingsPage() {
               <input id="reminderHoursBeforeCutOff" name="reminderHoursBeforeCutOff" type="text" defaultValue={config.cadence.reminderHoursBeforeCutOff.join(', ')} />
             </div>
           </div>
-          <button type="submit">Save cadence</button>
+          <label className="row" style={{ gap: '0.5rem', alignItems: 'center', marginTop: '0.75rem' }}>
+            <input type="checkbox" name="automationEnabled" defaultChecked={config.cadence.automationEnabled} />
+            Run this on a schedule — distribute a ready draft, chase and escalate outstanding members, and close a
+            round automatically, all at the times above. Off by default; finalising a round always stays manual.
+          </label>
+          <button type="submit" style={{ marginTop: '0.75rem' }}>
+            Save cadence
+          </button>
         </form>
       </section>
 

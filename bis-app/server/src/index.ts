@@ -18,6 +18,7 @@ import roundRoutes from './routes/rounds.js';
 import scoringRoutes from './routes/scoring.js';
 import ticketRoutes from './routes/tickets.js';
 import { errorHandler } from './routes/helpers.js';
+import { runAutomationTick } from './services/automationService.js';
 
 export async function createApp() {
   assertProductionSafety();
@@ -98,7 +99,19 @@ if (isDirectRun) {
     console.log(`[bis] API listening on :${env.port} (auth=${env.auth.mode}, db=${env.db.driver})`);
   });
 
+  // §11/§15: the cadence scheduler. Off unless Settings switches automation
+  // on, and every tick is idempotent (see automationService), so this is
+  // safe to run on an interval rather than needing an external cron.
+  const AUTOMATION_INTERVAL_MS = 5 * 60 * 1000;
+  const automationTimer = setInterval(() => {
+    getDb()
+      .then((db) => runAutomationTick(db))
+      .catch((err) => console.error('[bis] automation tick failed', err));
+  }, AUTOMATION_INTERVAL_MS);
+  automationTimer.unref();
+
   const shutdown = async () => {
+    clearInterval(automationTimer);
     server.close();
     await closeDb();
     process.exit(0);

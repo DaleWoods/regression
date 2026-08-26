@@ -176,6 +176,12 @@ export function GuidePage() {
           and priority band update as scores come in, so there's no need to wait for the round to close to see how
           it's shaping up.
         </p>
+        <p>
+          Distributing, chasing, escalating and closing can also run on a schedule — switch on "Run this on a
+          schedule" under Cadence in Settings, and a ready draft goes out and outstanding members get chased
+          automatically at the times set there. It's off by default, and finalising a round is never automatic —
+          that stays a deliberate action.
+        </p>
       </Section>
 
       <Section id="jira" title="Getting scores into JIRA" index={7}>

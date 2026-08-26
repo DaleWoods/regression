@@ -160,6 +160,7 @@ export interface AppConfig {
     reminderHoursBeforeCutOff: number[];
     escalationHoursBeforeCutOff: number | null;
     timezone: string;
+    automationEnabled: boolean;
   };
   jira: {
     queueJql: string;
