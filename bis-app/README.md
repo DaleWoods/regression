@@ -91,9 +91,16 @@ for seeing the maths without scoring four tickets by hand first.
 ### Tests
 
 ```bash
-npm test --workspace server        # 33 tests over the §10 calculation module
+npm test --workspace server        # server-side unit tests: §10 calculation, write-back, automation, import
 npm run typecheck                  # server + web
+npm run test:e2e                   # golden-path browser tests against a real seeded instance (Playwright)
 ```
+
+`test:e2e` starts its own server (SQLite, `server/data/e2e.db`) and web dev server, seeded with the
+demo round, and drives them through an actual browser. It's not a substitute for the unit tests above -
+they cover the scoring maths and write-back logic in far more depth than clicking through a UI
+reasonably can - it's there to catch the things unit tests can't: a button that doesn't call the route
+you think it does, a page that doesn't render what the API sent back.
 
 ### Production build
 

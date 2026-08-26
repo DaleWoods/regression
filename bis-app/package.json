@@ -5,7 +5,8 @@
   "description": "Business Impact Scoring (BIS) application - WOSG",
   "workspaces": [
     "server",
-    "web"
+    "web",
+    "e2e"
   ],
   "scripts": {
     "dev": "npm run dev --workspace server & npm run dev --workspace web",
@@ -14,6 +15,7 @@
     "build": "npm run build --workspace server && npm run build --workspace web",
     "start": "npm run start --workspace server",
     "test": "npm run test --workspace server",
+    "test:e2e": "npm run test --workspace e2e",
     "migrate": "npm run migrate --workspace server",
     "seed": "npm run seed --workspace server",
     "typecheck": "npm run typecheck --workspace server && npm run typecheck --workspace web"
