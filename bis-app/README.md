@@ -20,8 +20,8 @@ creates you as an admin on first boot, because a fresh database has no members a
 Everything else can be left blank and filled in later from the Settings screen.
 
 That gives you the whole application on a real database: create a round, write ticket cards, open it
-for scoring, watch submissions land, see the aggregation, generate the pack, export CSV, finalise, and
-open the anonymised feedback view.
+for scoring, watch submissions land, see the aggregation, export CSV, finalise, and open the anonymised
+feedback view.
 
 ### Signing in
 
@@ -110,7 +110,7 @@ npm start                          # API serves the built UI from the same origi
 |---|---|
 | §5 domain model | `server/src/db/schema.sql`, `server/src/services/*` |
 | §6 seven categories, stored as data | `categories` table, seeded from `domain/types.ts`, editable in Settings |
-| §7 ticket card / distribution pack | `web/src/components/TicketCard.tsx`, `server/src/pack/pptx.ts`, `pack/pdf.ts` |
+| §7 ticket card | `web/src/components/TicketCard.tsx` |
 | §8 relevance & closure rules | `services/submissionService.ts` (server-enforced) |
 | §9 impartiality & feedback view | `routes/rounds.ts`, `services/resultService.ts`, `web/src/pages/FeedbackPage.tsx` |
 | §10 the maths | `server/src/domain/scoring.ts` + `scoring.test.ts` |
@@ -185,7 +185,7 @@ the server is the enforcement.
 ## Configuration
 
 Copy `.env.example` to `.env`. Business rules are **not** in there - they live in the database and are
-edited in Settings (thresholds, categories, cadence, effort mapping, JIRA field ids, pack branding).
+edited in Settings (thresholds, categories, cadence, effort mapping, JIRA field ids).
 
 ### Database
 

@@ -7,7 +7,6 @@ import {
   DEFAULT_APP_CONFIG,
   DEFAULT_CADENCE_CONFIG,
   DEFAULT_JIRA_CONFIG,
-  DEFAULT_PACK_CONFIG,
   DEFAULT_SCORING_CONFIG,
   ScoringConfig,
   SEED_CATEGORIES,
@@ -67,7 +66,6 @@ export async function getAppConfig(db: Db): Promise<AppConfig> {
     scoring: merge(DEFAULT_SCORING_CONFIG, stored.get('scoring')),
     cadence: merge(DEFAULT_CADENCE_CONFIG, stored.get('cadence')),
     jira: merge(DEFAULT_JIRA_CONFIG, stored.get('jira')),
-    pack: merge(DEFAULT_PACK_CONFIG, stored.get('pack')),
   };
 }
 

@@ -4,7 +4,7 @@ import { getDb } from '../db/index.js';
 import { requireAuth, requireCoordinator } from '../auth/middleware.js';
 import { STREAMS, isCoordinator } from '../domain/types.js';
 import { audit } from '../services/auditService.js';
-import { getAppConfig, listCategories } from '../services/configService.js';
+import { listCategories } from '../services/configService.js';
 import { listEmailLog, sendDistribution, sendReminders } from '../services/emailService.js';
 import { listActiveScorers, getMember } from '../services/memberService.js';
 import { buildFeedbackView, computeRoundResults, resultsToCsv, snapshotRoundResults } from '../services/resultService.js';
@@ -22,8 +22,6 @@ import {
 } from '../services/roundService.js';
 import { listRoundSubmissions, roundProgress } from '../services/submissionService.js';
 import { listWriteBacks, writeBackRound } from '../services/jiraService.js';
-import { buildPptx } from '../pack/pptx.js';
-import { buildPdf } from '../pack/pdf.js';
 import { actorOf, asyncHandler } from './helpers.js';
 
 const router = Router();
@@ -234,59 +232,12 @@ router.get(
   }),
 );
 
-async function packInput(roundId: string) {
-  const db = await getDb();
-  const round = await getRound(db, roundId);
-  if (!round) return null;
-  const [tickets, categories, config] = await Promise.all([
-    listRoundTickets(db, round.id),
-    listCategories(db),
-    getAppConfig(db),
-  ]);
-  return { db, round, tickets, categories, config: config.pack };
-}
-
-router.get(
-  '/rounds/:id/pack.pptx',
-  requireAuth,
-  asyncHandler(async (req, res) => {
-    const input = await packInput(req.params.id);
-    if (!input) {
-      res.status(404).json({ error: 'Round not found' });
-      return;
-    }
-    const buffer = await buildPptx(input);
-    await audit(await getDb(), actorOf(req), 'round.pack.pptx', 'round', input.round.id, {});
-    res.setHeader('content-type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
-    res.setHeader('content-disposition', `attachment; filename="bis-${slug(input.round.weekLabel)}-pack.pptx"`);
-    res.send(buffer);
-  }),
-);
-
-router.get(
-  '/rounds/:id/pack.pdf',
-  requireAuth,
-  asyncHandler(async (req, res) => {
-    const input = await packInput(req.params.id);
-    if (!input) {
-      res.status(404).json({ error: 'Round not found' });
-      return;
-    }
-    const buffer = await buildPdf(input);
-    res.setHeader('content-type', 'application/pdf');
-    res.setHeader('content-disposition', `attachment; filename="bis-${slug(input.round.weekLabel)}-pack.pdf"`);
-    res.send(buffer);
-  }),
-);
-
 /** Open the round and email the committee (§12.2). */
 router.post(
   '/rounds/:id/distribute',
   requireCoordinator,
   asyncHandler(async (req, res) => {
-    const { attachPack, open } = z
-      .object({ attachPack: z.boolean().optional(), open: z.boolean().optional() })
-      .parse(req.body ?? {});
+    const { open } = z.object({ open: z.boolean().optional() }).parse(req.body ?? {});
     const db = await getDb();
     let round = await getRound(db, req.params.id);
     if (!round) {
@@ -300,21 +251,8 @@ router.post(
     }
     if ((open ?? true) && round.status === 'DRAFT') round = await setRoundStatus(db, round.id, 'OPEN');
 
-    let attachment;
-    if (attachPack) {
-      const input = await packInput(round.id);
-      if (input) {
-        const buffer = await buildPptx(input);
-        attachment = {
-          name: `bis-${slug(round.weekLabel)}-pack.pptx`,
-          contentType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-          contentBytes: buffer.toString('base64'),
-        };
-      }
-    }
-
     const recipients = await listActiveScorers(db);
-    const results = await sendDistribution(db, round, tickets, recipients, attachment);
+    const results = await sendDistribution(db, round, tickets, recipients);
     await markDistributed(db, round.id);
     await audit(db, actorOf(req), 'round.distribute', 'round', round.id, {
       recipients: recipients.length,

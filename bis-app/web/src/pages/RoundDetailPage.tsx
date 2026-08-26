@@ -15,7 +15,7 @@ import { TicketEditor } from './TicketEditor';
 
 /**
  * Coordinator dashboard for one round: ticket cards, submission progress,
- * live §10 results, distribution/reminders, pack, CSV and JIRA write-back.
+ * live §10 results, distribution/reminders, CSV and JIRA write-back.
  */
 export function RoundDetailPage({ member, roundId }: { member: Member; roundId: string }) {
   const [round, setRound] = useState<Round | null>(null);
@@ -76,18 +76,12 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
         <div>
           <h1>{round.weekLabel}</h1>
           <p className="lede">
-            <span className={`badge ${round.status === 'OPEN' ? 'open' : ''}`}>{round.status}</span> · Cut-off{' '}
+            <span className={`badge ${round.status === 'OPEN' ? 'open' : round.status === 'CLOSED' ? 'closed' : ''}`}>{round.status}</span> · Cut-off{' '}
             {formatDateTime(round.cutOffAt)} · {tickets.length} tickets · {scored} with responses · {readyForEstimation}{' '}
             ready to send for estimation
           </p>
         </div>
         <div className="row">
-          <a className="button secondary" href={`/api/rounds/${round.id}/pack.pptx`}>
-            Download pack (PPTX)
-          </a>
-          <a className="button secondary" href={`/api/rounds/${round.id}/pack.pdf`}>
-            PDF
-          </a>
           <a className="button secondary" href={`/api/rounds/${round.id}/results.csv`}>
             Results CSV
           </a>
@@ -120,7 +114,7 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
                 disabled={Boolean(busy)}
                 onClick={() =>
                   run('distribute', async () => {
-                    const { results } = await api.distribute(round.id, true);
+                    const { results } = await api.distribute(round.id);
                     const sent = results.filter((r) => r.status === 'SENT').length;
                     const suppressed = results.filter((r) => r.status === 'SUPPRESSED').length;
                     return `Distribution: ${sent} sent, ${suppressed} suppressed (Graph sending disabled), ${
@@ -168,15 +162,33 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
                   run('writeback', async () => {
                     const { entries } = await api.writeBack(round.id);
                     const ok = entries.filter((e) => e.status === 'SUCCESS').length;
-                    const skipped = entries.filter((e) => e.status === 'SKIPPED').length;
+                    const skipped = entries.filter((e) => e.status === 'SKIPPED');
                     const failed = entries.filter((e) => e.status === 'FAILED');
-                    return `JIRA write-back: ${ok} written, ${skipped} skipped, ${failed.length} failed${
-                      failed.length ? ` (${failed[0].reason ?? ''})` : ''
+                    return `JIRA write-back: ${ok} written, ${skipped.length} skipped, ${failed.length} failed${
+                      failed.length ? ` (${failed[0].reason ?? ''})` : skipped.length ? ` (${skipped[0].reason ?? ''})` : ''
                     }.`;
                   })
                 }
               >
                 Write scores to JIRA
+              </button>
+              <button
+                className="secondary"
+                disabled={Boolean(busy)}
+                title="Writes tickets that are below the minimum response count too. Tickets held for discussion are still skipped."
+                onClick={() =>
+                  run('writeback-force', async () => {
+                    const { entries } = await api.writeBack(round.id, true);
+                    const ok = entries.filter((e) => e.status === 'SUCCESS').length;
+                    const skipped = entries.filter((e) => e.status === 'SKIPPED');
+                    const failed = entries.filter((e) => e.status === 'FAILED');
+                    return `JIRA write-back (anyway): ${ok} written, ${skipped.length} skipped, ${failed.length} failed${
+                      failed.length ? ` (${failed[0].reason ?? ''})` : skipped.length ? ` (${skipped[0].reason ?? ''})` : ''
+                    }.`;
+                  })
+                }
+              >
+                Write to JIRA anyway
               </button>
             </>
           )}

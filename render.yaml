@@ -29,8 +29,7 @@ services:
     runtime: node
     # The app lives in a subdirectory of this repo.
     rootDir: bis-app
-    # starter = 512MB, which is ample: no browser, no image processing. The
-    # PPTX/PDF pack is generated in-process from text.
+    # starter = 512MB, which is ample: no browser, no image processing.
     plan: starter
     buildCommand: npm ci && npm run build
     startCommand: npm start

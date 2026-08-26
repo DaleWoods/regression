@@ -94,26 +94,48 @@ export async function writeBackRound(
       entries.push({ jiraId: ticket.jiraId, businessScore: null, status: 'SKIPPED', reason: 'No valid submissions' });
       continue;
     }
-    if (!aggregate.minSubmissionsMet) {
-      entries.push({
-        jiraId: ticket.jiraId,
-        businessScore: aggregate.businessScore,
-        status: 'SKIPPED',
-        reason: `Fewer than ${config.scoring.minSubmissions} responses – rolls over`,
-      });
-      continue;
-    }
 
+    // Fetched up front so `force` can also override the min-submissions gate
+    // below: a ticket already written under a prior override must stay
+    // write-able (e.g. to pick up the transition) without needing the
+    // override a second time.
     const existing = await db.get<{ id: string; status: string; attempts: number }>(
       'SELECT id, status, attempts FROM jira_writebacks WHERE idempotency_key = ?',
       [key],
     );
-    if (existing?.status === 'SUCCESS' && !options.force) {
+    const alreadyWritten = existing?.status === 'SUCCESS';
+
+    if (!aggregate.minSubmissionsMet && !options.force && !alreadyWritten) {
+      const nonYes = aggregate.submissionsCount - aggregate.responsesCount;
+      entries.push({
+        jiraId: ticket.jiraId,
+        businessScore: aggregate.businessScore,
+        status: 'SKIPPED',
+        reason:
+          `${aggregate.responsesCount} of the ${config.scoring.minSubmissions} responses needed – rolls over to the next round` +
+          (nonYes > 0
+            ? ` (${aggregate.submissionsCount} submitted in total; ${nonYes} answered something other than "Yes", which doesn't count toward this)`
+            : ''),
+      });
+      continue;
+    }
+    if (alreadyWritten && !options.force) {
       entries.push({
         jiraId: ticket.jiraId,
         businessScore: aggregate.businessScore,
         status: 'SKIPPED',
         reason: 'Already written with this score',
+      });
+      continue;
+    }
+    // A split committee gets talked through, not silently averaged into JIRA -
+    // not even under force, which only ever overrides the response-count gate.
+    if (aggregate.discussionRequired) {
+      entries.push({
+        jiraId: ticket.jiraId,
+        businessScore: aggregate.businessScore,
+        status: 'SKIPPED',
+        reason: 'Held for discussion – scores were too far apart to average',
       });
       continue;
     }
@@ -139,8 +161,11 @@ export async function writeBackRound(
     try {
       await jira.writeBusinessScore(ticket.jiraId, config.jira.businessScoreFieldId, aggregate.businessScore);
 
+      // aggregate.sendForEstimation requires minSubmissionsMet, which a forced
+      // or already-written ticket may not have - the gates above are the real
+      // authority on whether this ticket is ready to move.
       let transitionedTo = '';
-      if (config.jira.transitionOnFinalise && aggregate.sendForEstimation) {
+      if (config.jira.transitionOnFinalise) {
         transitionedTo = await jira.transitionIssue(ticket.jiraId, config.jira.transitionName);
       }
 

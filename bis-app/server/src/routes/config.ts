@@ -86,14 +86,7 @@ const jiraSchema = z.object({
   transitionName: z.string().optional(),
 });
 
-const packSchema = z.object({
-  organisation: z.string().optional(),
-  deckTitle: z.string().optional(),
-  closingMessage: z.string().optional(),
-  accentColour: z.string().optional(),
-});
-
-const sectionSchemas = { scoring: scoringSchema, cadence: cadenceSchema, jira: jiraSchema, pack: packSchema } as const;
+const sectionSchemas = { scoring: scoringSchema, cadence: cadenceSchema, jira: jiraSchema } as const;
 
 router.put(
   '/config/:section',
