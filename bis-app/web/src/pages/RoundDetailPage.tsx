@@ -329,8 +329,19 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
             disabled={Boolean(busy)}
             onClick={() =>
               run('jira', async () => {
-                const { imported } = await api.importJira(jql || undefined, round.id);
-                return `Imported ${imported.length} ticket(s) from JIRA.`;
+                const { imported, duplicates, missingEffort } = await api.importJira(jql || undefined, round.id);
+                const notes: string[] = [];
+                if (duplicates.length) {
+                  notes.push(
+                    `${duplicates.length} already in another round (${duplicates
+                      .map((d) => `${d.jiraId} in "${d.otherRoundLabel}"`)
+                      .join(', ')})`,
+                  );
+                }
+                if (missingEffort.length) {
+                  notes.push(`${missingEffort.length} with no effort estimate yet (${missingEffort.join(', ')})`);
+                }
+                return `Imported ${imported.length} ticket(s) from JIRA.${notes.length ? ' ' + notes.join('. ') + '.' : ''}`;
               })
             }
           >

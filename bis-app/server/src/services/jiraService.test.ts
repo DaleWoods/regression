@@ -14,6 +14,7 @@ vi.mock('../integrations/jira.js', async (importOriginal) => {
     ...actual,
     writeBusinessScore: vi.fn().mockResolvedValue(undefined),
     transitionIssue: vi.fn().mockResolvedValue('Ready For Estimation'),
+    searchQueue: vi.fn().mockResolvedValue([]),
   };
 });
 
@@ -28,8 +29,9 @@ vi.mock('../config/env.js', async (importOriginal) => {
   };
 });
 
-const { writeBackRound } = await import('./jiraService.js');
+const { writeBackRound, importQueue } = await import('./jiraService.js');
 const { getAppConfig } = await import('./configService.js');
+const jira = await import('../integrations/jira.js');
 
 async function setUp() {
   const db: Db = await createDb({ driver: 'sqlite', sqliteFile: ':memory:' });
@@ -170,5 +172,40 @@ describe('writeBackRound', () => {
     const resolved = await writeBackRound(db, actor, round, {});
     expect(resolved[0].status).toBe('SUCCESS');
     expect(resolved[0].businessScore).toBe(42);
+  });
+});
+
+describe('importQueue', () => {
+  const actor = { id: 'coordinator', name: 'Coordinator', email: 'coordinator@example.com' };
+
+  it('flags a ticket already sitting in another open round, and a ticket with no effort estimate', async () => {
+    const { db, round: existingRound } = await setUp(); // already has ticket BIS-1, and is OPEN
+    const newRound = await createRound(db, { weekLabel: 'Week 2', cutOffAt: new Date(Date.now() + 86_400_000).toISOString() });
+
+    vi.mocked(jira.searchQueue).mockResolvedValueOnce([
+      { jiraId: 'BIS-1', title: 'A ticket' }, // already in existingRound
+      { jiraId: 'BIS-2', title: 'A brand new ticket' }, // no backend/frontend/manual effort at all
+    ]);
+
+    const result = await importQueue(db, actor, { roundId: newRound.id });
+
+    expect(result.imported.map((t) => t.jiraId).sort()).toEqual(['BIS-1', 'BIS-2']);
+    expect(result.duplicates).toEqual([
+      { jiraId: 'BIS-1', otherRoundId: existingRound.id, otherRoundLabel: existingRound.weekLabel },
+    ]);
+    expect(result.missingEffort).toEqual(['BIS-1', 'BIS-2']);
+  });
+
+  it('does not flag a ticket that has an effort estimate', async () => {
+    const { db } = await setUp();
+    const newRound = await createRound(db, { weekLabel: 'Week 2', cutOffAt: new Date(Date.now() + 86_400_000).toISOString() });
+
+    vi.mocked(jira.searchQueue).mockResolvedValueOnce([
+      { jiraId: 'BIS-9', title: 'Already estimated', backendPokerScore: 5, frontendPokerScore: 3 },
+    ]);
+
+    const result = await importQueue(db, actor, { roundId: newRound.id });
+    expect(result.missingEffort).toEqual([]);
+    expect(result.duplicates).toEqual([]);
   });
 });

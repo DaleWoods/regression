@@ -157,6 +157,12 @@ export function GuidePage() {
         <p>From a round's page, a coordinator can:</p>
         <ul>
           <li>
+            <strong>Import from JIRA</strong> — pulls in the configured queue (or a one-off JQL override) and adds
+            each ticket to the round. Nothing is blocked, but the result flags anything worth a second look: a
+            ticket already sitting in another draft/open round, and a ticket with no effort estimate yet (it'll
+            show no priority ratio until one's added).
+          </li>
+          <li>
             <strong>Distribute to committee</strong> — opens the round (if it's still a draft) and emails every
             active committee member.
           </li>

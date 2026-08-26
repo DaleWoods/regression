@@ -1,6 +1,7 @@
 import { Db } from '../db/index.js';
 import { env } from '../config/env.js';
 import { AppConfig } from '../domain/types.js';
+import { resolveEffort } from '../domain/scoring.js';
 import * as jira from '../integrations/jira.js';
 import { newId } from '../util/id.js';
 import { nowIso } from '../util/time.js';
@@ -11,9 +12,19 @@ import { computeRoundResults } from './resultService.js';
 import { listDiscussionResolutions } from './discussionService.js';
 import { Ticket, upsertTicket } from './ticketService.js';
 
+export interface ImportDuplicate {
+  jiraId: string;
+  otherRoundId: string;
+  otherRoundLabel: string;
+}
+
 export interface ImportResult {
   imported: Ticket[];
   addedToRound: number;
+  /** Tickets added that are already sitting in another draft/open round - not blocked, just flagged. */
+  duplicates: ImportDuplicate[];
+  /** Imported tickets with no resolvable effort estimate, so they'll show no priority ratio until one's added. */
+  missingEffort: string[];
 }
 
 /** Read the Business Scoring queue and bring it into the app (§12.1). */
@@ -30,20 +41,39 @@ export async function importQueue(
   );
 
   const imported: Ticket[] = [];
+  const duplicates: ImportDuplicate[] = [];
+  const missingEffort: string[] = [];
+
   for (const input of inputs) {
     // preserveAuthored: a re-sync refreshes JIRA fields but never clobbers the
     // coordinator's executive summary or four panels (§7).
     const ticket = await upsertTicket(db, input, { preserveAuthored: true });
     imported.push(ticket);
-    if (options.roundId) await addTicketToRound(db, options.roundId, ticket.id);
+
+    if (resolveEffort(ticket, config.scoring) === null) missingEffort.push(ticket.jiraId);
+
+    if (options.roundId) {
+      const existingElsewhere = await db.get<{ round_id: string; week_label: string }>(
+        `SELECT rt.round_id, r.week_label FROM round_tickets rt
+         JOIN rounds r ON r.id = rt.round_id
+         WHERE rt.ticket_id = ? AND rt.round_id != ? AND r.status IN ('DRAFT', 'OPEN')`,
+        [ticket.id, options.roundId],
+      );
+      if (existingElsewhere) {
+        duplicates.push({ jiraId: ticket.jiraId, otherRoundId: existingElsewhere.round_id, otherRoundLabel: existingElsewhere.week_label });
+      }
+      await addTicketToRound(db, options.roundId, ticket.id);
+    }
   }
 
   await audit(db, actor, 'jira.import', 'round', options.roundId ?? '', {
     jql: options.jql ?? config.jira.queueJql,
     count: imported.length,
+    duplicates: duplicates.length,
+    missingEffort: missingEffort.length,
   });
 
-  return { imported, addedToRound: options.roundId ? imported.length : 0 };
+  return { imported, addedToRound: options.roundId ? imported.length : 0, duplicates, missingEffort };
 }
 
 /** Refresh RA poker effort (and status) for tickets already in the app (§10.4). */
