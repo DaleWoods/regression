@@ -2,6 +2,7 @@ import { Db } from '../db/index.js';
 import { env } from '../config/env.js';
 import { MailAttachment, sendMail } from '../integrations/graph.js';
 import { newId } from '../util/id.js';
+import { logWarn } from '../util/logger.js';
 import { formatUkDate, nowIso } from '../util/time.js';
 import { Member } from './memberService.js';
 import { Round } from './roundService.js';
@@ -105,6 +106,9 @@ export async function sendDistribution(
       status: outcome.status,
       error: outcome.error,
     });
+    if (outcome.status === 'FAILED') {
+      logWarn('email.distribution', { roundId: round.id, memberId: member.id, error: outcome.error });
+    }
     results.push({ memberId: member.id, email: member.email, status: outcome.status, error: outcome.error });
   }
   return results;
@@ -131,6 +135,9 @@ export async function sendReminders(
       status: outcome.status,
       error: outcome.error,
     });
+    if (outcome.status === 'FAILED') {
+      logWarn('email.reminder', { roundId: round.id, memberId: member.id, escalation, error: outcome.error });
+    }
     results.push({ memberId: member.id, email: member.email, status: outcome.status, error: outcome.error });
   }
   return results;

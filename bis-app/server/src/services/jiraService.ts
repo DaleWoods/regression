@@ -11,6 +11,7 @@ import { HttpishError, Round, addTicketToRound } from './roundService.js';
 import { computeRoundResults } from './resultService.js';
 import { listDiscussionResolutions } from './discussionService.js';
 import { Ticket, upsertTicket } from './ticketService.js';
+import { logError } from '../util/logger.js';
 
 export interface ImportDuplicate {
   jiraId: string;
@@ -223,6 +224,7 @@ export async function writeBackRound(
       entries.push({ jiraId: ticket.jiraId, businessScore, status: 'SUCCESS', transitionedTo });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      logError('jira.writeback', err, { roundId: round.id, jiraId: ticket.jiraId, businessScore });
       await db.run('UPDATE jira_writebacks SET status = ?, error = ?, updated_at = ? WHERE id = ?', [
         'FAILED',
         message,

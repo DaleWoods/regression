@@ -19,6 +19,7 @@ import scoringRoutes from './routes/scoring.js';
 import ticketRoutes from './routes/tickets.js';
 import { errorHandler } from './routes/helpers.js';
 import { runAutomationTick } from './services/automationService.js';
+import { logError } from './util/logger.js';
 
 export async function createApp() {
   assertProductionSafety();
@@ -106,7 +107,7 @@ if (isDirectRun) {
   const automationTimer = setInterval(() => {
     getDb()
       .then((db) => runAutomationTick(db))
-      .catch((err) => console.error('[bis] automation tick failed', err));
+      .catch((err) => logError('automation.tick', err));
   }, AUTOMATION_INTERVAL_MS);
   automationTimer.unref();
 

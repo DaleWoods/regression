@@ -3,6 +3,7 @@ import { ZodError } from 'zod';
 import { HttpishError } from '../services/roundService.js';
 import { JiraApiError, JiraNotConfiguredError } from '../integrations/jira.js';
 import { GraphNotConfiguredError } from '../integrations/graph.js';
+import { logError } from '../util/logger.js';
 
 export function asyncHandler(handler: (req: Request, res: Response, next: NextFunction) => Promise<unknown>): RequestHandler {
   return (req, res, next) => {
@@ -10,7 +11,7 @@ export function asyncHandler(handler: (req: Request, res: Response, next: NextFu
   };
 }
 
-export function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction): void {
+export function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction): void {
   if (err instanceof HttpishError) {
     res.status(err.status).json({ error: err.message });
     return;
@@ -27,7 +28,9 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
     res.status(502).json({ error: err.message });
     return;
   }
-  console.error('[bis] unhandled error', err);
+  // Everything above is an expected, named failure mode with its own status
+  // code - what lands here is the unexpected kind, worth a full stack trace.
+  logError('http.unhandled', err, { method: req.method, path: req.path, memberId: req.member?.id ?? null });
   res.status(500).json({ error: err instanceof Error ? err.message : 'Unexpected error' });
 }
 

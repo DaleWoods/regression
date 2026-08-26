@@ -1,6 +1,7 @@
 import { Db } from '../db/index.js';
 import { CadenceConfig } from '../domain/types.js';
 import { newId } from '../util/id.js';
+import { logError } from '../util/logger.js';
 import { nowIso } from '../util/time.js';
 import { getAppConfig } from './configService.js';
 import { sendDistribution, sendReminders } from './emailService.js';
@@ -90,6 +91,7 @@ async function autoDistribute(db: Db, cadence: CadenceConfig, now: Date): Promis
       const failed = results.filter((r) => r.status === 'FAILED').length;
       await logAttempt(db, 'DISTRIBUTE', round.id, failed ? 'FAILED' : 'SUCCESS', '', attempts, `${results.length - failed} sent, ${failed} failed`);
     } catch (err) {
+      logError('automation.distribute', err, { roundId: round.id, attempts });
       await logAttempt(db, 'DISTRIBUTE', round.id, 'FAILED', '', attempts, err instanceof Error ? err.message : String(err));
     }
   }
@@ -132,6 +134,7 @@ async function autoRemindAndEscalate(db: Db, cadence: CadenceConfig, now: Date):
         const failed = results.filter((r) => r.status === 'FAILED').length;
         await logAttempt(db, kind, round.id, failed ? 'FAILED' : 'SUCCESS', detail, attempts, `${results.length - failed} sent, ${failed} failed`);
       } catch (err) {
+        logError(`automation.${kind.toLowerCase()}`, err, { roundId: round.id, threshold: hours, attempts });
         await logAttempt(db, kind, round.id, 'FAILED', detail, attempts, err instanceof Error ? err.message : String(err));
       }
     }
@@ -147,6 +150,7 @@ async function autoClose(db: Db, now: Date): Promise<void> {
       await setRoundStatus(db, round.id, 'CLOSED');
       await logAttempt(db, 'CLOSE', round.id, 'SUCCESS', '', attempts, 'Cut-off passed');
     } catch (err) {
+      logError('automation.close', err, { roundId: round.id, attempts });
       await logAttempt(db, 'CLOSE', round.id, 'FAILED', '', attempts, err instanceof Error ? err.message : String(err));
     }
   }
