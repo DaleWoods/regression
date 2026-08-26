@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, formatDateTime, type Category, type Member, type Relevance, type Round, type Submission, type Ticket } from '../api';
 import { TicketCard } from '../components/TicketCard';
 import { ScoreForm } from '../components/ScoreForm';
+import { Link } from '../router';
 
 interface Props {
   member: Member;
@@ -19,6 +20,7 @@ export function ScorePage({ member, roundId }: Props) {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [relevanceOptions, setRelevanceOptions] = useState<Array<{ value: Relevance; label: string }>>([]);
   const [closureReasons, setClosureReasons] = useState<string[]>([]);
+  const [lastFinalisedRound, setLastFinalisedRound] = useState<Round | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -37,6 +39,7 @@ export function ScorePage({ member, roundId }: Props) {
         setTickets(data.tickets);
         setCategories(data.categories);
         setSubmissions(data.submissions);
+        setLastFinalisedRound('lastFinalisedRound' in data ? (data.lastFinalisedRound ?? null) : null);
         setError('');
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load the round');
@@ -57,6 +60,12 @@ export function ScorePage({ member, roundId }: Props) {
       <>
         <h1>Scoring</h1>
         <div className="notice">There is no open scoring round at the moment. You will get an email when the next round opens.</div>
+        {lastFinalisedRound ? (
+          <div className="notice" role="status" style={{ marginTop: '1rem' }}>
+            The round you scored, <strong>{lastFinalisedRound.weekLabel}</strong>, has finished.{' '}
+            <Link to={`/feedback/${lastFinalisedRound.id}`}>See how your scores compared to the committee's</Link>.
+          </div>
+        ) : null}
       </>
     );
   }

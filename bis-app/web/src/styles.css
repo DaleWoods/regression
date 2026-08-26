@@ -504,6 +504,12 @@ legend {
   font-variant-numeric: tabular-nums;
 }
 
+/* A gap this big from the committee is worth a glance, not an alarm. */
+td.num.over {
+  color: var(--medium);
+  font-weight: 600;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;

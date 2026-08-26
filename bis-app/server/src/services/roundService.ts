@@ -72,6 +72,14 @@ export async function getActiveRound(db: Db): Promise<Round | undefined> {
   return row ? map(row) : undefined;
 }
 
+/** The most recently finalised round, so a member can be pointed at its feedback view. */
+export async function getLastFinalisedRound(db: Db): Promise<Round | undefined> {
+  const row = await db.get<RoundRow>(
+    `${WITH_COUNT} WHERE r.status = 'FINALISED' ORDER BY r.finalised_at DESC LIMIT 1`,
+  );
+  return row ? map(row) : undefined;
+}
+
 export async function createRound(
   db: Db,
   input: { weekLabel: string; cutOffAt: string; stream?: Stream; notes?: string; createdBy?: string },

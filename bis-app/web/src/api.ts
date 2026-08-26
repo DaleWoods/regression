@@ -169,11 +169,13 @@ export interface FeedbackTicket {
   jiraId: string;
   title: string;
   type: string;
+  rank: number;
   responsesCount: number;
   businessScore: number | null;
   stdDev: number | null;
   discussionRequired: boolean;
   statusLabel: string;
+  resultLabel: string;
   priorityRatio: number | null;
   priorityBandLabel: string;
   effort: number | null;
@@ -181,6 +183,8 @@ export interface FeedbackTicket {
   totalsDistribution: number[];
   excludedCounts: Record<string, number>;
   notes: string[];
+  yourTotal: number | null;
+  yourRelevance: boolean;
 }
 
 export class ApiError extends Error {
@@ -218,6 +222,7 @@ export const api = {
       tickets: Ticket[];
       submissions: Submission[];
       categories: Category[];
+      lastFinalisedRound?: Round | null;
     }>('/api/my/round'),
   myRoundSubmissions: (roundId: string) =>
     request<{ round: Round; scoringOpen: boolean; tickets: Ticket[]; submissions: Submission[]; categories: Category[] }>(

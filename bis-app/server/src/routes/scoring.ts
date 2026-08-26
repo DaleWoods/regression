@@ -3,10 +3,11 @@ import { z } from 'zod';
 import { getDb } from '../db/index.js';
 import { requireAuth } from '../auth/middleware.js';
 import { RELEVANCE_VALUES, isCoordinator } from '../domain/types.js';
+import { isValidSubmission } from '../domain/scoring.js';
 import { audit } from '../services/auditService.js';
 import { getScoringConfig, listCategories } from '../services/configService.js';
-import { getActiveRound, getRound, isScoringOpen, listRoundTickets } from '../services/roundService.js';
-import { listMemberSubmissions, saveSubmission } from '../services/submissionService.js';
+import { getActiveRound, getLastFinalisedRound, getRound, isScoringOpen, listRoundTickets } from '../services/roundService.js';
+import { listMemberSubmissions, saveSubmission, toScoringInput } from '../services/submissionService.js';
 import { getTicket } from '../services/ticketService.js';
 import { actorOf, asyncHandler } from './helpers.js';
 
@@ -23,7 +24,17 @@ router.get(
     const db = await getDb();
     const round = await getActiveRound(db);
     if (!round) {
-      res.json({ round: null, tickets: [], submissions: [], categories: await listCategories(db) });
+      const lastFinalised = await getLastFinalisedRound(db);
+      const lastFinalisedIncludesYou = lastFinalised
+        ? (await listMemberSubmissions(db, lastFinalised.id, req.member!.id)).map(toScoringInput).some(isValidSubmission)
+        : false;
+      res.json({
+        round: null,
+        tickets: [],
+        submissions: [],
+        categories: await listCategories(db),
+        lastFinalisedRound: lastFinalisedIncludesYou ? lastFinalised : null,
+      });
       return;
     }
     res.json({

@@ -1,5 +1,5 @@
 import { Db } from '../db/index.js';
-import { TicketAggregate, aggregateTicket, resolveEffort } from '../domain/scoring.js';
+import { TicketAggregate, aggregateTicket, isValidSubmission, resolveEffort, submissionTotal } from '../domain/scoring.js';
 import { CategoryDef, PRIORITY_BAND_LABELS, ScoringConfig } from '../domain/types.js';
 import { nowIso } from '../util/time.js';
 import { listCategories, getScoringConfig } from './configService.js';
@@ -94,11 +94,14 @@ export interface FeedbackTicket {
   jiraId: string;
   title: string;
   type: string;
+  rank: number;
   responsesCount: number;
   businessScore: number | null;
   stdDev: number | null;
   discussionRequired: boolean;
   statusLabel: string;
+  /** Plain-English outcome for the "what happened to this ticket" column - not a raw progress label. */
+  resultLabel: string;
   priorityRatio: number | null;
   priorityBandLabel: string;
   effort: number | null;
@@ -106,38 +109,66 @@ export interface FeedbackTicket {
   totalsDistribution: number[];
   excludedCounts: Record<string, number>;
   notes: string[];
+  /** The requesting member's own total for this ticket, if they gave a valid (Yes) score. */
+  yourTotal: number | null;
+  /** True if the member answered at all (even if not "Yes"), so the UI can show n/a vs a dash. */
+  yourRelevance: boolean;
 }
 
-export async function buildFeedbackView(db: Db, round: Round): Promise<FeedbackTicket[]> {
-  const results = await computeRoundResults(db, round);
+function resultLabelFor(aggregate: TicketAggregate): string {
+  if (aggregate.toClose) return 'Committee said this can be closed';
+  if (!aggregate.minSubmissionsMet) return 'Not enough responses to send';
+  return 'Sent for estimation';
+}
+
+export async function buildFeedbackView(db: Db, round: Round, memberId?: string): Promise<FeedbackTicket[]> {
+  const config = await getScoringConfig(db);
+  const categories = await listCategories(db, true);
+  const results = await computeRoundResults(db, round, { config, categories });
   const submissions = await listRoundSubmissions(db, round.id);
 
   const notesByTicket = new Map<string, string[]>();
+  const yourSubmissionByTicket = new Map<string, (typeof submissions)[number]>();
   for (const submission of submissions) {
     const text = [submission.moreInfo, submission.closureInfo].filter((s) => s && s.trim()).join(' — ');
-    if (!text) continue;
-    const bucket = notesByTicket.get(submission.ticketId) ?? [];
-    bucket.push(text.trim());
-    notesByTicket.set(submission.ticketId, bucket);
+    if (text) {
+      const bucket = notesByTicket.get(submission.ticketId) ?? [];
+      bucket.push(text.trim());
+      notesByTicket.set(submission.ticketId, bucket);
+    }
+    if (memberId && submission.memberId === memberId && !submission.archived) {
+      yourSubmissionByTicket.set(submission.ticketId, submission);
+    }
   }
 
-  return results.map(({ ticket, aggregate }) => ({
-    jiraId: ticket.jiraId,
-    title: ticket.title,
-    type: ticket.type,
-    responsesCount: aggregate.responsesCount,
-    businessScore: aggregate.businessScore,
-    stdDev: aggregate.stdDev,
-    discussionRequired: aggregate.discussionRequired,
-    statusLabel: aggregate.statusLabel,
-    priorityRatio: aggregate.priorityRatio,
-    priorityBandLabel: aggregate.priorityBand ? PRIORITY_BAND_LABELS[aggregate.priorityBand] : '',
-    effort: aggregate.effort,
-    categoryAverages: aggregate.categoryAverages,
-    totalsDistribution: aggregate.totalsDistribution,
-    excludedCounts: aggregate.excludedCounts,
-    notes: notesByTicket.get(ticket.id) ?? [],
-  }));
+  const ranked = [...results].sort((a, b) => (b.aggregate.businessScore ?? -1) - (a.aggregate.businessScore ?? -1));
+  const rankByTicketId = new Map(ranked.map(({ ticket }, index) => [ticket.id, index + 1]));
+
+  return results.map(({ ticket, aggregate }) => {
+    const yourSubmission = yourSubmissionByTicket.get(ticket.id);
+    const yourInput = yourSubmission ? toScoringInput(yourSubmission) : null;
+    return {
+      jiraId: ticket.jiraId,
+      title: ticket.title,
+      type: ticket.type,
+      rank: rankByTicketId.get(ticket.id) ?? 0,
+      responsesCount: aggregate.responsesCount,
+      businessScore: aggregate.businessScore,
+      stdDev: aggregate.stdDev,
+      discussionRequired: aggregate.discussionRequired,
+      statusLabel: aggregate.statusLabel,
+      resultLabel: resultLabelFor(aggregate),
+      priorityRatio: aggregate.priorityRatio,
+      priorityBandLabel: aggregate.priorityBand ? PRIORITY_BAND_LABELS[aggregate.priorityBand] : '',
+      effort: aggregate.effort,
+      categoryAverages: aggregate.categoryAverages,
+      totalsDistribution: aggregate.totalsDistribution,
+      excludedCounts: aggregate.excludedCounts,
+      notes: notesByTicket.get(ticket.id) ?? [],
+      yourTotal: yourInput && isValidSubmission(yourInput) ? submissionTotal(yourInput, categories, config) : null,
+      yourRelevance: Boolean(yourSubmission),
+    };
+  });
 }
 
 function csvCell(value: unknown): string {

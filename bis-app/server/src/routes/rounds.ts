@@ -228,7 +228,7 @@ router.get(
       res.status(403).json({ error: 'The feedback view opens once the round is finalised' });
       return;
     }
-    res.json({ round, tickets: await buildFeedbackView(db, round) });
+    res.json({ round, tickets: await buildFeedbackView(db, round, req.member!.id) });
   }),
 );
 
