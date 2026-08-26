@@ -4,6 +4,7 @@ import {
   formatDateTime,
   type Category,
   type Member,
+  type MemberParticipation,
   type MemberProgress,
   type Round,
   type Submission,
@@ -22,6 +23,7 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [progress, setProgress] = useState<MemberProgress[]>([]);
+  const [participation, setParticipation] = useState<MemberParticipation[]>([]);
   const [results, setResults] = useState<TicketResult[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [error, setError] = useState('');
@@ -38,6 +40,7 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
       setTickets(data.tickets);
       setCategories(data.categories);
       setProgress(data.progress ?? []);
+      setParticipation(data.participation ?? []);
       setResults(data.results ?? []);
       setSubmissions(data.submissions ?? []);
       setError('');
@@ -208,32 +211,41 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
                 Outstanding
               </th>
               <th scope="col">Last submitted</th>
+              <th scope="col">Recent participation</th>
             </tr>
           </thead>
           <tbody>
-            {progress.map((row) => (
-              <tr key={row.memberId}>
-                <th scope="row" style={{ background: 'transparent', textTransform: 'none', letterSpacing: 0, fontSize: '0.95rem', color: 'inherit' }}>
-                  {row.memberName}
-                </th>
-                <td>{row.team || '—'}</td>
-                <td>
-                  <div className="row" style={{ gap: '0.5rem' }}>
-                    <span className="bar" aria-hidden="true">
-                      <span style={{ width: `${tickets.length ? (row.submitted / tickets.length) * 100 : 0}%` }} />
-                    </span>
-                    <span>
-                      {row.submitted}/{tickets.length}
-                    </span>
-                  </div>
-                </td>
-                <td className="num">{row.outstanding}</td>
-                <td>{formatDateTime(row.lastSubmittedAt)}</td>
-              </tr>
-            ))}
+            {progress.map((row) => {
+              const history = participation.find((p) => p.memberId === row.memberId);
+              return (
+                <tr key={row.memberId}>
+                  <th scope="row" style={{ background: 'transparent', textTransform: 'none', letterSpacing: 0, fontSize: '0.95rem', color: 'inherit' }}>
+                    {row.memberName}
+                  </th>
+                  <td>{row.team || '—'}</td>
+                  <td>
+                    <div className="row" style={{ gap: '0.5rem' }}>
+                      <span className="bar" aria-hidden="true">
+                        <span style={{ width: `${tickets.length ? (row.submitted / tickets.length) * 100 : 0}%` }} />
+                      </span>
+                      <span>
+                        {row.submitted}/{tickets.length}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="num">{row.outstanding}</td>
+                  <td>{formatDateTime(row.lastSubmittedAt)}</td>
+                  <td>
+                    {history && history.roundsAvailable > 0
+                      ? `Scored ${history.roundsScored} of the last ${history.roundsAvailable} round${history.roundsAvailable === 1 ? '' : 's'}`
+                      : '—'}
+                  </td>
+                </tr>
+              );
+            })}
             {!progress.length ? (
               <tr>
-                <td colSpan={5}>No active committee members.</td>
+                <td colSpan={6}>No active committee members.</td>
               </tr>
             ) : null}
           </tbody>

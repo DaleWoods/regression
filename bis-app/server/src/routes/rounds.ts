@@ -6,7 +6,7 @@ import { STREAMS, isCoordinator } from '../domain/types.js';
 import { audit } from '../services/auditService.js';
 import { listCategories } from '../services/configService.js';
 import { listEmailLog, sendDistribution, sendReminders } from '../services/emailService.js';
-import { listActiveScorers, getMember } from '../services/memberService.js';
+import { listActiveScorers, getMember, memberParticipation } from '../services/memberService.js';
 import { buildFeedbackView, computeRoundResults, resultsToCsv, snapshotRoundResults } from '../services/resultService.js';
 import {
   addTicketToRound,
@@ -82,6 +82,7 @@ router.get(
       payload.progress = await roundProgress(db, round.id, scorers, tickets.length);
       payload.results = await computeRoundResults(db, round);
       payload.submissions = await listRoundSubmissions(db, round.id);
+      payload.participation = await memberParticipation(db, scorers.map((s) => s.id));
     }
     res.json(payload);
   }),

@@ -123,6 +123,13 @@ export interface MemberProgress {
   complete: boolean;
 }
 
+export interface MemberParticipation {
+  memberId: string;
+  roundsAvailable: number;
+  roundsScored: number;
+  lastScoredAt: string | null;
+}
+
 export interface ScoringModel {
   categories: Category[];
   relevanceOptions: Array<{ value: Relevance; label: string }>;
@@ -247,6 +254,7 @@ export const api = {
       progress?: MemberProgress[];
       results?: TicketResult[];
       submissions?: Submission[];
+      participation?: MemberParticipation[];
     }>(`/api/rounds/${id}`),
   createRound: (input: { weekLabel: string; cutOffAt: string; stream?: string; notes?: string }) =>
     request<{ round: Round }>('/api/rounds', { method: 'POST', body: JSON.stringify(input) }),

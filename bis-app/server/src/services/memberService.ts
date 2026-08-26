@@ -101,6 +101,56 @@ export async function saveMember(db: Db, input: MemberInput): Promise<Member> {
   return (await getMember(db, id)) as Member;
 }
 
+export interface MemberParticipation {
+  memberId: string;
+  roundsAvailable: number;
+  roundsScored: number;
+  lastScoredAt: string | null;
+}
+
+/**
+ * How much of the last N finalised rounds each member actually scored - a
+ * valid "Yes" submission on at least one ticket counts as having taken part
+ * in that round. Members with zero participation over the window still get
+ * an entry (roundsScored: 0), so a coordinator can see who has gone quiet.
+ */
+export async function memberParticipation(db: Db, memberIds: string[], limit = 8): Promise<MemberParticipation[]> {
+  const rounds = await db.all<{ id: string }>(
+    `SELECT id FROM rounds WHERE status = 'FINALISED' ORDER BY finalised_at DESC LIMIT ?`,
+    [limit],
+  );
+  const result = new Map<string, MemberParticipation>(
+    memberIds.map((id) => [id, { memberId: id, roundsAvailable: rounds.length, roundsScored: 0, lastScoredAt: null }]),
+  );
+  if (!rounds.length || !memberIds.length) return [...result.values()];
+
+  const roundPlaceholders = rounds.map(() => '?').join(', ');
+  const memberPlaceholders = memberIds.map(() => '?').join(', ');
+  const rows = await db.all<{ member_id: string; round_id: string; last_at: string }>(
+    `SELECT member_id, round_id, MAX(updated_at) AS last_at FROM submissions
+     WHERE round_id IN (${roundPlaceholders}) AND member_id IN (${memberPlaceholders})
+       AND relevance = 'YES' AND archived = 0
+     GROUP BY member_id, round_id`,
+    [...rounds.map((r) => r.id), ...memberIds],
+  );
+
+  const scoredRoundsByMember = new Map<string, Set<string>>();
+  for (const row of rows) {
+    const set = scoredRoundsByMember.get(row.member_id) ?? new Set<string>();
+    set.add(row.round_id);
+    scoredRoundsByMember.set(row.member_id, set);
+
+    const entry = result.get(row.member_id);
+    if (entry && (!entry.lastScoredAt || row.last_at > entry.lastScoredAt)) entry.lastScoredAt = row.last_at;
+  }
+  for (const [memberId, set] of scoredRoundsByMember) {
+    const entry = result.get(memberId);
+    if (entry) entry.roundsScored = set.size;
+  }
+
+  return [...result.values()];
+}
+
 export async function recordLogin(db: Db, id: string, entraOid?: string | null): Promise<void> {
   await db.run('UPDATE members SET last_login_at = ?, entra_oid = COALESCE(?, entra_oid), updated_at = ? WHERE id = ?', [
     nowIso(),
