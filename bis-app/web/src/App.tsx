@@ -8,6 +8,7 @@ import { RoundDetailPage } from './pages/RoundDetailPage';
 import { FeedbackPage } from './pages/FeedbackPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { AuditPage } from './pages/AuditPage';
+import { GuidePage } from './pages/GuidePage';
 
 export function App() {
   const { path, navigate } = useRouter();
@@ -41,6 +42,7 @@ export function App() {
         <nav aria-label="Main">
           <Link to="/">Score</Link>
           <Link to="/rounds">Rounds</Link>
+          <Link to="/guide">Guide</Link>
           {coordinator ? <Link to="/settings">Settings</Link> : null}
           {coordinator ? <Link to="/audit">Audit</Link> : null}
         </nav>
@@ -90,6 +92,8 @@ function Routes({ path, member, coordinator }: { path: string; member: Member; c
 
   const feedback = matchRoute('/feedback/:id', path);
   if (feedback) return <FeedbackPage roundId={feedback.id} />;
+
+  if (path === '/guide') return <GuidePage />;
 
   if (path === '/settings') return coordinator ? <SettingsPage /> : <Forbidden />;
   if (path === '/audit') return coordinator ? <AuditPage /> : <Forbidden />;
