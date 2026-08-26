@@ -8,6 +8,7 @@ import { AuditActor, audit } from './auditService.js';
 import { getAppConfig } from './configService.js';
 import { HttpishError, Round, addTicketToRound } from './roundService.js';
 import { computeRoundResults } from './resultService.js';
+import { listDiscussionResolutions } from './discussionService.js';
 import { Ticket, upsertTicket } from './ticketService.js';
 
 export interface ImportResult {
@@ -85,15 +86,34 @@ export async function writeBackRound(
   }
 
   const results = await computeRoundResults(db, round, { config: config.scoring });
+  const resolutions = await listDiscussionResolutions(db, round.id);
   const entries: WriteBackEntry[] = [];
 
   for (const { ticket, aggregate } of results) {
-    const key = `${round.id}:${ticket.id}:${aggregate.businessScore ?? 'null'}`;
-
     if (aggregate.businessScore === null) {
       entries.push({ jiraId: ticket.jiraId, businessScore: null, status: 'SKIPPED', reason: 'No valid submissions' });
       continue;
     }
+
+    // A split committee gets talked through, not silently averaged into JIRA -
+    // not even under force, which only ever overrides the response-count gate.
+    // The one way past this gate is a meeting agreeing an explicit score.
+    const resolution = aggregate.discussionRequired ? resolutions.get(ticket.id) : undefined;
+    const agreedScore = resolution?.agreedScore ?? null;
+    if (aggregate.discussionRequired && agreedScore === null) {
+      entries.push({
+        jiraId: ticket.jiraId,
+        businessScore: aggregate.businessScore,
+        status: 'SKIPPED',
+        reason: resolution
+          ? `Discussed (${resolution.outcome}), but no agreed score was recorded to write`
+          : 'Held for discussion – scores were too far apart to average',
+      });
+      continue;
+    }
+
+    const businessScore = agreedScore ?? aggregate.businessScore;
+    const key = `${round.id}:${ticket.id}:${businessScore}`;
 
     // Fetched up front so `force` can also override the min-submissions gate
     // below: a ticket already written under a prior override must stay
@@ -105,7 +125,7 @@ export async function writeBackRound(
     );
     const alreadyWritten = existing?.status === 'SUCCESS';
 
-    if (!aggregate.minSubmissionsMet && !options.force && !alreadyWritten) {
+    if (!aggregate.minSubmissionsMet && agreedScore === null && !options.force && !alreadyWritten) {
       const nonYes = aggregate.submissionsCount - aggregate.responsesCount;
       entries.push({
         jiraId: ticket.jiraId,
@@ -122,20 +142,9 @@ export async function writeBackRound(
     if (alreadyWritten && !options.force) {
       entries.push({
         jiraId: ticket.jiraId,
-        businessScore: aggregate.businessScore,
+        businessScore,
         status: 'SKIPPED',
         reason: 'Already written with this score',
-      });
-      continue;
-    }
-    // A split committee gets talked through, not silently averaged into JIRA -
-    // not even under force, which only ever overrides the response-count gate.
-    if (aggregate.discussionRequired) {
-      entries.push({
-        jiraId: ticket.jiraId,
-        businessScore: aggregate.businessScore,
-        status: 'SKIPPED',
-        reason: 'Held for discussion – scores were too far apart to average',
       });
       continue;
     }
@@ -154,12 +163,12 @@ export async function writeBackRound(
       await db.run(
         `INSERT INTO jira_writebacks (id, round_id, ticket_id, jira_id, business_score, idempotency_key, status, attempts, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, 'PENDING', ?, ?, ?)`,
-        [id, round.id, ticket.id, ticket.jiraId, aggregate.businessScore, key, attempts, now, now],
+        [id, round.id, ticket.id, ticket.jiraId, businessScore, key, attempts, now, now],
       );
     }
 
     try {
-      await jira.writeBusinessScore(ticket.jiraId, config.jira.businessScoreFieldId, aggregate.businessScore);
+      await jira.writeBusinessScore(ticket.jiraId, config.jira.businessScoreFieldId, businessScore);
 
       // aggregate.sendForEstimation requires minSubmissionsMet, which a forced
       // or already-written ticket may not have - the gates above are the real
@@ -178,10 +187,10 @@ export async function writeBackRound(
       ]);
       await audit(db, actor, 'jira.writeback', 'ticket', ticket.id, {
         jiraId: ticket.jiraId,
-        businessScore: aggregate.businessScore,
+        businessScore,
         transitionedTo,
       });
-      entries.push({ jiraId: ticket.jiraId, businessScore: aggregate.businessScore, status: 'SUCCESS', transitionedTo });
+      entries.push({ jiraId: ticket.jiraId, businessScore, status: 'SUCCESS', transitionedTo });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       await db.run('UPDATE jira_writebacks SET status = ?, error = ?, updated_at = ? WHERE id = ?', [
@@ -191,7 +200,7 @@ export async function writeBackRound(
         id,
       ]);
       await audit(db, actor, 'jira.writeback.failed', 'ticket', ticket.id, { jiraId: ticket.jiraId, error: message });
-      entries.push({ jiraId: ticket.jiraId, businessScore: aggregate.businessScore, status: 'FAILED', reason: message });
+      entries.push({ jiraId: ticket.jiraId, businessScore, status: 'FAILED', reason: message });
     }
   }
 

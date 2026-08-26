@@ -200,7 +200,7 @@ export function GuidePage() {
         <p>
           <strong>Write to JIRA anyway</strong> writes those below-minimum tickets too, for when the coordinator
           judges the responses in hand are enough. It never overrides a ticket held for discussion — those stay
-          skipped until someone resolves the discussion.
+          skipped until someone records what the meeting decided, on the feedback view.
         </p>
       </Section>
 
@@ -214,6 +214,12 @@ export function GuidePage() {
           every ticket you scored, and a summary of whether you tended to score above or below the room. That's
           shown here, after the round, rather than during it — seeing the room's answer before giving your own
           wouldn't be an independent score.
+        </p>
+        <p>
+          For a ticket held for discussion, a coordinator can record what the meeting decided directly on its card
+          here — a short outcome, an optional note, and an agreed score if the meeting settled on one. Once
+          recorded, that outcome is visible to the whole committee, and if an agreed score was given, the ticket
+          becomes eligible for the normal JIRA write-back like any other — no separate step to remember.
         </p>
       </Section>
     </>

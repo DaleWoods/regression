@@ -3,6 +3,7 @@ import { TicketAggregate, aggregateTicket, isValidSubmission, resolveEffort, sub
 import { CategoryDef, PRIORITY_BAND_LABELS, ScoringConfig } from '../domain/types.js';
 import { nowIso } from '../util/time.js';
 import { listCategories, getScoringConfig } from './configService.js';
+import { listDiscussionResolutions } from './discussionService.js';
 import { Round, listRoundTickets } from './roundService.js';
 import { listRoundSubmissions, toScoringInput } from './submissionService.js';
 import { Ticket } from './ticketService.js';
@@ -91,6 +92,7 @@ export async function snapshotRoundResults(db: Db, round: Round): Promise<Ticket
  * individual attribution. Notes/queries are surfaced without their author.
  */
 export interface FeedbackTicket {
+  ticketId: string;
   jiraId: string;
   title: string;
   type: string;
@@ -113,6 +115,11 @@ export interface FeedbackTicket {
   yourTotal: number | null;
   /** True if the member answered at all (even if not "Yes"), so the UI can show n/a vs a dash. */
   yourRelevance: boolean;
+  /** What a meeting decided, once someone has recorded it (§10.4). Null while still waiting. */
+  discussionOutcome: string | null;
+  discussionNote: string;
+  /** The score the meeting agreed on, if any - this is what write-back uses instead of the average. */
+  agreedScore: number | null;
 }
 
 function resultLabelFor(aggregate: TicketAggregate): string {
@@ -126,6 +133,7 @@ export async function buildFeedbackView(db: Db, round: Round, memberId?: string)
   const categories = await listCategories(db, true);
   const results = await computeRoundResults(db, round, { config, categories });
   const submissions = await listRoundSubmissions(db, round.id);
+  const resolutions = await listDiscussionResolutions(db, round.id);
 
   const notesByTicket = new Map<string, string[]>();
   const yourSubmissionByTicket = new Map<string, (typeof submissions)[number]>();
@@ -147,7 +155,9 @@ export async function buildFeedbackView(db: Db, round: Round, memberId?: string)
   return results.map(({ ticket, aggregate }) => {
     const yourSubmission = yourSubmissionByTicket.get(ticket.id);
     const yourInput = yourSubmission ? toScoringInput(yourSubmission) : null;
+    const resolution = resolutions.get(ticket.id) ?? null;
     return {
+      ticketId: ticket.id,
       jiraId: ticket.jiraId,
       title: ticket.title,
       type: ticket.type,
@@ -167,6 +177,9 @@ export async function buildFeedbackView(db: Db, round: Round, memberId?: string)
       notes: notesByTicket.get(ticket.id) ?? [],
       yourTotal: yourInput && isValidSubmission(yourInput) ? submissionTotal(yourInput, categories, config) : null,
       yourRelevance: Boolean(yourSubmission),
+      discussionOutcome: resolution?.outcome ?? null,
+      discussionNote: resolution?.note ?? '',
+      agreedScore: resolution?.agreedScore ?? null,
     };
   });
 }

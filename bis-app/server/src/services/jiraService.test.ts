@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Db, createDb } from '../db/index.js';
 import { migrate } from '../db/migrate.js';
 import { ensureDefaultConfig, ensureSeedCategories, saveConfigSection } from '../services/configService.js';
+import { saveDiscussionResolution } from '../services/discussionService.js';
 import { saveMember } from '../services/memberService.js';
 import { addTicketToRound, createRound, setRoundStatus } from '../services/roundService.js';
 import { saveSubmission } from '../services/submissionService.js';
@@ -61,7 +62,20 @@ async function setUp() {
     });
   }
 
-  return { db, round, ticket, config, scoreIt };
+  async function scoreTotal(email: string, total: number) {
+    const member = await saveMember(db, { name: email, email, role: 'COMMITTEE' });
+    const base = Math.floor(total / categories.length);
+    let remainder = total % categories.length;
+    const scores: Record<string, number> = {};
+    for (const category of categories) {
+      const extra = remainder > 0 ? 1 : 0;
+      remainder -= extra;
+      scores[category.id] = base + extra;
+    }
+    await saveSubmission(db, { round, ticket, member, payload: { relevance: 'YES', scores }, config: config.scoring });
+  }
+
+  return { db, round, ticket, config, scoreIt, scoreTotal };
 }
 
 describe('writeBackRound', () => {
@@ -119,5 +133,42 @@ describe('writeBackRound', () => {
     const second = await writeBackRound(db, actor, round, {});
     expect(second[0].status).toBe('SKIPPED');
     expect(second[0].reason).toBe('Already written with this score');
+  });
+
+  it('a discussion held ticket stays skipped until a meeting agrees a score, then writes that score', async () => {
+    const { db, round, ticket, scoreTotal } = await setUp();
+    // Wide spread (0..70 across 5 members) pushes std dev well past the default threshold of 16.
+    await scoreTotal('a@example.com', 0);
+    await scoreTotal('b@example.com', 70);
+    await scoreTotal('c@example.com', 35);
+    await scoreTotal('d@example.com', 5);
+    await scoreTotal('e@example.com', 65);
+
+    const held = await writeBackRound(db, actor, round, {});
+    expect(held[0].status).toBe('SKIPPED');
+    expect(held[0].reason).toContain('Held for discussion');
+
+    // Recording an outcome without an agreed score still doesn't unblock write-back.
+    await saveDiscussionResolution(db, {
+      roundId: round.id,
+      ticketId: ticket.id,
+      outcome: 'Discussed, needs another look',
+      resolvedBy: 'Coordinator',
+    });
+    const stillHeld = await writeBackRound(db, actor, round, {});
+    expect(stillHeld[0].status).toBe('SKIPPED');
+    expect(stillHeld[0].reason).toContain('no agreed score was recorded');
+
+    // Recording an agreed score makes it write-back eligible, even under force being unnecessary.
+    await saveDiscussionResolution(db, {
+      roundId: round.id,
+      ticketId: ticket.id,
+      outcome: 'Send for estimation',
+      agreedScore: 42,
+      resolvedBy: 'Coordinator',
+    });
+    const resolved = await writeBackRound(db, actor, round, {});
+    expect(resolved[0].status).toBe('SUCCESS');
+    expect(resolved[0].businessScore).toBe(42);
   });
 });

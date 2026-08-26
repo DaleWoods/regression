@@ -91,7 +91,7 @@ function Routes({ path, member, coordinator }: { path: string; member: Member; c
   }
 
   const feedback = matchRoute('/feedback/:id', path);
-  if (feedback) return <FeedbackPage roundId={feedback.id} />;
+  if (feedback) return <FeedbackPage roundId={feedback.id} coordinator={coordinator} />;
 
   if (path === '/guide') return <GuidePage />;
 

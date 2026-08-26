@@ -174,6 +174,7 @@ export interface AppConfig {
 }
 
 export interface FeedbackTicket {
+  ticketId: string;
   jiraId: string;
   title: string;
   type: string;
@@ -193,6 +194,9 @@ export interface FeedbackTicket {
   notes: string[];
   yourTotal: number | null;
   yourRelevance: boolean;
+  discussionOutcome: string | null;
+  discussionNote: string;
+  agreedScore: number | null;
 }
 
 export class ApiError extends Error {
@@ -285,6 +289,11 @@ export const api = {
       `/api/rounds/${id}/emails`,
     ),
   feedback: (id: string) => request<{ round: Round; tickets: FeedbackTicket[] }>(`/api/rounds/${id}/feedback`),
+  saveDiscussion: (roundId: string, ticketId: string, input: { outcome: string; note?: string; agreedScore?: number | null }) =>
+    request<{ resolution: unknown }>(`/api/rounds/${roundId}/tickets/${ticketId}/discussion`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    }),
 
   tickets: () => request<{ tickets: Ticket[] }>('/api/tickets'),
   saveTicket: (input: Partial<Ticket> & { jiraId: string; title: string; roundId?: string }) =>

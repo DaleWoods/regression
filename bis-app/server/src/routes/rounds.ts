@@ -8,6 +8,7 @@ import { listCategories } from '../services/configService.js';
 import { listEmailLog, sendDistribution, sendReminders } from '../services/emailService.js';
 import { listActiveScorers, getMember, memberParticipation } from '../services/memberService.js';
 import { buildFeedbackView, computeRoundResults, resultsToCsv, snapshotRoundResults } from '../services/resultService.js';
+import { saveDiscussionResolution } from '../services/discussionService.js';
 import {
   addTicketToRound,
   createRound,
@@ -230,6 +231,54 @@ router.get(
       return;
     }
     res.json({ round, tickets: await buildFeedbackView(db, round, req.member!.id) });
+  }),
+);
+
+const discussionSchema = z.object({
+  outcome: z.string().min(1),
+  note: z.string().optional(),
+  agreedScore: z.number().min(0).max(70).nullable().optional(),
+});
+
+/** §10.4: record what a meeting decided about a ticket held for discussion. */
+router.put(
+  '/rounds/:id/tickets/:ticketId/discussion',
+  requireCoordinator,
+  asyncHandler(async (req, res) => {
+    const input = discussionSchema.parse(req.body ?? {});
+    const db = await getDb();
+    const round = await getRound(db, req.params.id);
+    if (!round) {
+      res.status(404).json({ error: 'Round not found' });
+      return;
+    }
+    if (round.status !== 'FINALISED') {
+      res.status(409).json({ error: 'Discussion outcomes can only be recorded once a round is finalised' });
+      return;
+    }
+    const snapshot = await db.get<{ discussion_required: number }>(
+      'SELECT discussion_required FROM ticket_results WHERE round_id = ? AND ticket_id = ?',
+      [round.id, req.params.ticketId],
+    );
+    if (!snapshot || Number(snapshot.discussion_required) !== 1) {
+      res.status(409).json({ error: 'This ticket was not held for discussion' });
+      return;
+    }
+
+    const resolution = await saveDiscussionResolution(db, {
+      roundId: round.id,
+      ticketId: req.params.ticketId,
+      outcome: input.outcome,
+      note: input.note,
+      agreedScore: input.agreedScore ?? null,
+      resolvedBy: req.member!.name,
+    });
+    await audit(db, actorOf(req), 'round.discussion.resolve', 'ticket', req.params.ticketId, {
+      roundId: round.id,
+      outcome: resolution.outcome,
+      agreedScore: resolution.agreedScore,
+    });
+    res.json({ resolution });
   }),
 );
 

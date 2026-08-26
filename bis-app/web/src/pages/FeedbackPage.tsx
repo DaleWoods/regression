@@ -13,12 +13,12 @@ import { api, formatDateTime, type FeedbackTicket, type Round } from '../api';
  * round, rather than during it: a score you can see the room's answer before
  * giving is not an independent score.
  */
-export function FeedbackPage({ roundId }: { roundId: string }) {
+export function FeedbackPage({ roundId, coordinator }: { roundId: string; coordinator: boolean }) {
   const [round, setRound] = useState<Round | null>(null);
   const [tickets, setTickets] = useState<FeedbackTicket[]>([]);
   const [error, setError] = useState('');
 
-  useEffect(() => {
+  const load = () =>
     api
       .feedback(roundId)
       .then((data) => {
@@ -26,15 +26,21 @@ export function FeedbackPage({ roundId }: { roundId: string }) {
         setTickets(data.tickets);
       })
       .catch((err) => setError(err.message));
+
+  useEffect(() => {
+    load();
   }, [roundId]);
 
   if (error) return <p className="status error">{error}</p>;
   if (!round) return <p>Loading…</p>;
 
   const table = [...tickets].sort((a, b) => a.rank - b.rank);
-  const scoredByYou = tickets.filter((t) => t.yourTotal !== null && t.businessScore !== null);
-  const higher = scoredByYou.filter((t) => t.yourTotal! > t.businessScore!).length;
-  const lower = scoredByYou.filter((t) => t.yourTotal! < t.businessScore!).length;
+  // A resolved discussion's agreed score is the committee's real answer for
+  // that ticket - it supersedes the average that couldn't be trusted alone.
+  const committeeScoreOf = (t: FeedbackTicket) => t.agreedScore ?? t.businessScore;
+  const scoredByYou = tickets.filter((t) => t.yourTotal !== null && committeeScoreOf(t) !== null);
+  const higher = scoredByYou.filter((t) => t.yourTotal! > committeeScoreOf(t)!).length;
+  const lower = scoredByYou.filter((t) => t.yourTotal! < committeeScoreOf(t)!).length;
   /*
     Two different numbers, and saying which is which matters. The lean is the
     mean signed difference - whether you tend to sit above or below the room.
@@ -44,10 +50,10 @@ export function FeedbackPage({ roundId }: { roundId: string }) {
     perfectly aligned.
   */
   const lean = scoredByYou.length
-    ? scoredByYou.reduce((sum, t) => sum + (t.yourTotal! - t.businessScore!), 0) / scoredByYou.length
+    ? scoredByYou.reduce((sum, t) => sum + (t.yourTotal! - committeeScoreOf(t)!), 0) / scoredByYou.length
     : 0;
   const typicalGap = scoredByYou.length
-    ? scoredByYou.reduce((sum, t) => sum + Math.abs(t.yourTotal! - t.businessScore!), 0) / scoredByYou.length
+    ? scoredByYou.reduce((sum, t) => sum + Math.abs(t.yourTotal! - committeeScoreOf(t)!), 0) / scoredByYou.length
     : 0;
 
   return (
@@ -114,10 +120,8 @@ export function FeedbackPage({ roundId }: { roundId: string }) {
             </thead>
             <tbody>
               {table.map((ticket) => {
-                const gap =
-                  ticket.yourTotal !== null && ticket.businessScore !== null
-                    ? ticket.yourTotal - ticket.businessScore
-                    : null;
+                const committeeScore = committeeScoreOf(ticket);
+                const gap = ticket.yourTotal !== null && committeeScore !== null ? ticket.yourTotal - committeeScore : null;
                 return (
                   <tr key={ticket.jiraId}>
                     <td className="num">{ticket.rank}</td>
@@ -127,7 +131,7 @@ export function FeedbackPage({ roundId }: { roundId: string }) {
                     >
                       {ticket.jiraId} – {ticket.title}
                     </th>
-                    <td className="num">{ticket.businessScore ?? '—'}</td>
+                    <td className="num">{committeeScore ?? '—'}</td>
                     <td className="num">
                       {ticket.yourTotal !== null ? ticket.yourTotal : ticket.yourRelevance ? 'n/a' : '—'}
                     </td>
@@ -136,7 +140,7 @@ export function FeedbackPage({ roundId }: { roundId: string }) {
                       {gap === null ? '—' : gap > 0 ? `+${gap}` : gap}
                     </td>
                     <td className="num">{ticket.stdDev === null ? '—' : ticket.stdDev.toFixed(1)}</td>
-                    <td>{ticket.discussionRequired ? 'Held for discussion' : ticket.resultLabel}</td>
+                    <td>{ticket.discussionOutcome || (ticket.discussionRequired ? 'Held for discussion' : ticket.resultLabel)}</td>
                   </tr>
                 );
               })}
@@ -157,16 +161,25 @@ export function FeedbackPage({ roundId }: { roundId: string }) {
             </h2>
             <div className="row">
               <span className="badge">{ticket.responsesCount} responses</span>
-              <span className={`badge ${ticket.discussionRequired ? 'warn' : ticket.priorityBandLabel === 'High priority' ? 'high' : ''}`}>
-                {ticket.statusLabel || 'No status yet'}
+              <span
+                className={`badge ${ticket.discussionRequired && !ticket.discussionOutcome ? 'warn' : ticket.priorityBandLabel === 'High priority' ? 'high' : ''}`}
+              >
+                {ticket.discussionRequired
+                  ? ticket.discussionOutcome
+                    ? 'Discussed'
+                    : 'Pending discussion'
+                  : ticket.statusLabel || 'No status yet'}
               </span>
             </div>
           </div>
 
           <div className="row" style={{ marginTop: '0.75rem', gap: '1.5rem' }}>
             <p style={{ margin: 0 }}>
-              <strong style={{ fontSize: '1.6rem' }}>{ticket.businessScore ?? '—'}</strong>
+              <strong style={{ fontSize: '1.6rem' }}>{committeeScoreOf(ticket) ?? '—'}</strong>
               <span className="hint"> / 70 business score</span>
+              {ticket.agreedScore !== null ? (
+                <span className="hint"> · agreed at the discussion, from an average of {ticket.businessScore}</span>
+              ) : null}
             </p>
             <p style={{ margin: 0 }}>
               Spread (std dev): <strong>{ticket.stdDev === null ? '—' : ticket.stdDev.toFixed(1)}</strong>
@@ -175,13 +188,13 @@ export function FeedbackPage({ roundId }: { roundId: string }) {
             {ticket.yourTotal !== null ? (
               <p style={{ margin: 0 }}>
                 You scored it <strong>{ticket.yourTotal}</strong>
-                {ticket.businessScore !== null ? (
+                {committeeScoreOf(ticket) !== null ? (
                   <span className="hint">
                     {' '}
-                    ({ticket.yourTotal === ticket.businessScore
+                    ({ticket.yourTotal === committeeScoreOf(ticket)
                       ? 'the same as the committee'
-                      : `${Math.abs(ticket.yourTotal - ticket.businessScore)} ${
-                          ticket.yourTotal > ticket.businessScore ? 'higher' : 'lower'
+                      : `${Math.abs(ticket.yourTotal - committeeScoreOf(ticket)!)} ${
+                          ticket.yourTotal > committeeScoreOf(ticket)! ? 'higher' : 'lower'
                         } than the committee`}
                     )
                   </span>
@@ -195,10 +208,7 @@ export function FeedbackPage({ roundId }: { roundId: string }) {
           </div>
 
           {ticket.discussionRequired ? (
-            <div className="notice warn" style={{ marginTop: '0.75rem' }}>
-              <strong>Held for discussion.</strong> The scores for this one were too far apart to average, so it is
-              waiting on a meeting. Nothing has been written to JIRA for it.
-            </div>
+            <DiscussionPanel roundId={roundId} ticket={ticket} coordinator={coordinator} onSaved={load} />
           ) : null}
 
           <h3 style={{ marginTop: '1rem' }}>Category averages</h3>
@@ -256,5 +266,134 @@ export function FeedbackPage({ roundId }: { roundId: string }) {
         </section>
       ))}
     </>
+  );
+}
+
+/**
+ * §10.4: a split committee is talked through, not silently averaged. This is
+ * where that conversation's outcome gets recorded - visible to everyone once
+ * it exists, editable only by a coordinator.
+ */
+function DiscussionPanel({
+  roundId,
+  ticket,
+  coordinator,
+  onSaved,
+}: {
+  roundId: string;
+  ticket: FeedbackTicket;
+  coordinator: boolean;
+  onSaved: () => void;
+}) {
+  const resolved = ticket.discussionOutcome !== null;
+  const [editing, setEditing] = useState(!resolved && coordinator);
+  const [outcome, setOutcome] = useState(ticket.discussionOutcome ?? '');
+  const [note, setNote] = useState(ticket.discussionNote);
+  const [agreedScore, setAgreedScore] = useState(ticket.agreedScore === null ? '' : String(ticket.agreedScore));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  if (resolved && !editing) {
+    return (
+      <div className="notice" style={{ marginTop: '0.75rem' }}>
+        <strong>Discussed: {ticket.discussionOutcome!.toLowerCase()}.</strong>
+        {ticket.agreedScore !== null ? ` The committee settled on ${ticket.agreedScore} out of 70.` : ''}
+        {ticket.discussionNote ? ` ${ticket.discussionNote}` : ''}
+        {coordinator ? (
+          <>
+            {' '}
+            <button className="secondary" style={{ marginLeft: '0.5rem' }} onClick={() => setEditing(true)}>
+              Edit
+            </button>
+          </>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (!editing) {
+    return (
+      <div className="notice warn" style={{ marginTop: '0.75rem' }}>
+        <strong>Held for discussion.</strong> The scores for this one were too far apart to average, so it is
+        waiting on a meeting. Nothing has been written to JIRA for it.
+      </div>
+    );
+  }
+
+  return (
+    <form
+      className="notice warn"
+      style={{ marginTop: '0.75rem' }}
+      onSubmit={async (event) => {
+        event.preventDefault();
+        setSaving(true);
+        setError('');
+        try {
+          await api.saveDiscussion(roundId, ticket.ticketId, {
+            outcome,
+            note: note || undefined,
+            agreedScore: agreedScore.trim() === '' ? null : Number(agreedScore),
+          });
+          setEditing(false);
+          onSaved();
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Could not save');
+        } finally {
+          setSaving(false);
+        }
+      }}
+    >
+      <p style={{ marginTop: 0 }}>
+        <strong>Held for discussion.</strong> Record what the meeting decided.
+      </p>
+      <div className="row" style={{ gap: '0.75rem', flexWrap: 'wrap' }}>
+        <div className="grow field">
+          <label htmlFor={`outcome-${ticket.jiraId}`}>Outcome</label>
+          <input
+            id={`outcome-${ticket.jiraId}`}
+            type="text"
+            required
+            placeholder="e.g. Send for estimation"
+            value={outcome}
+            onChange={(e) => setOutcome(e.target.value)}
+          />
+        </div>
+        <div className="field">
+          <label htmlFor={`agreed-${ticket.jiraId}`}>Agreed score (optional)</label>
+          <input
+            id={`agreed-${ticket.jiraId}`}
+            type="number"
+            min={0}
+            max={70}
+            placeholder="0-70"
+            value={agreedScore}
+            onChange={(e) => setAgreedScore(e.target.value)}
+          />
+        </div>
+      </div>
+      <div className="field">
+        <label htmlFor={`note-${ticket.jiraId}`}>Note (optional)</label>
+        <textarea id={`note-${ticket.jiraId}`} value={note} onChange={(e) => setNote(e.target.value)} />
+      </div>
+      <p className="hint">
+        Leave the agreed score blank if the meeting decided not to send it for estimation - it just won't be
+        eligible for JIRA write-back.
+      </p>
+      <div className="row">
+        <button type="submit" disabled={saving}>
+          {saving ? 'Saving…' : 'Save outcome'}
+        </button>
+        {resolved ? (
+          <button type="button" className="secondary" onClick={() => setEditing(false)}>
+            Cancel
+          </button>
+        ) : null}
+      </div>
+      {error ? (
+        <p className="status error" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </form>
   );
 }
