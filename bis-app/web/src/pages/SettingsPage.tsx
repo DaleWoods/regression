@@ -257,17 +257,24 @@ export function SettingsPage() {
           onSubmit={(event) => {
             event.preventDefault();
             const form = new FormData(event.currentTarget);
+            const [distributionHour, distributionMinute] = String(form.get('distributionTime') || '09:00').split(':').map(Number);
+            const [cutOffHour, cutOffMinute] = String(form.get('cutOffTime') || '17:00').split(':').map(Number);
             saveSection(
               'cadence',
               {
                 distributionDayOfWeek: Number(form.get('distributionDayOfWeek')),
-                distributionHour: Number(form.get('distributionHour')),
+                distributionHour,
+                distributionMinute,
                 cutOffDayOfWeek: Number(form.get('cutOffDayOfWeek')),
-                cutOffHour: Number(form.get('cutOffHour')),
-                reminderHoursBeforeCutOff: String(form.get('reminderHoursBeforeCutOff'))
+                cutOffHour,
+                cutOffMinute,
+                reminderMinutesBeforeCutOff: String(form.get('reminderMinutesBeforeCutOff'))
                   .split(',')
                   .map((value) => Number(value.trim()))
                   .filter((value) => Number.isFinite(value)),
+                escalationMinutesBeforeCutOff: form.get('escalationMinutesBeforeCutOff')
+                  ? Number(form.get('escalationMinutesBeforeCutOff'))
+                  : null,
                 automationEnabled: form.get('automationEnabled') === 'on',
               },
               'Cadence',
@@ -286,8 +293,13 @@ export function SettingsPage() {
               </select>
             </div>
             <div className="grow field">
-              <label htmlFor="distributionHour">Distribution hour</label>
-              <input id="distributionHour" name="distributionHour" type="number" min={0} max={23} defaultValue={config.cadence.distributionHour} />
+              <label htmlFor="distributionTime">Distribution time</label>
+              <input
+                id="distributionTime"
+                name="distributionTime"
+                type="time"
+                defaultValue={`${String(config.cadence.distributionHour).padStart(2, '0')}:${String(config.cadence.distributionMinute).padStart(2, '0')}`}
+              />
             </div>
             <div className="grow field">
               <label htmlFor="cutOffDayOfWeek">Cut-off day</label>
@@ -300,12 +312,36 @@ export function SettingsPage() {
               </select>
             </div>
             <div className="grow field">
-              <label htmlFor="cutOffHour">Cut-off hour</label>
-              <input id="cutOffHour" name="cutOffHour" type="number" min={0} max={23} defaultValue={config.cadence.cutOffHour} />
+              <label htmlFor="cutOffTime">Cut-off time</label>
+              <input
+                id="cutOffTime"
+                name="cutOffTime"
+                type="time"
+                defaultValue={`${String(config.cadence.cutOffHour).padStart(2, '0')}:${String(config.cadence.cutOffMinute).padStart(2, '0')}`}
+              />
+            </div>
+          </div>
+          <div className="row">
+            <div className="grow field">
+              <label htmlFor="reminderMinutesBeforeCutOff">Reminders (minutes before cut-off)</label>
+              <input
+                id="reminderMinutesBeforeCutOff"
+                name="reminderMinutesBeforeCutOff"
+                type="text"
+                defaultValue={config.cadence.reminderMinutesBeforeCutOff.join(', ')}
+              />
+              <p className="hint">Comma-separated, e.g. "2880, 1440, 240" for 48h/24h/4h, or "10, 5" to run a whole cycle in minutes while testing.</p>
             </div>
             <div className="grow field">
-              <label htmlFor="reminderHoursBeforeCutOff">Reminders (hours before cut-off)</label>
-              <input id="reminderHoursBeforeCutOff" name="reminderHoursBeforeCutOff" type="text" defaultValue={config.cadence.reminderHoursBeforeCutOff.join(', ')} />
+              <label htmlFor="escalationMinutesBeforeCutOff">Escalation (minutes before cut-off)</label>
+              <input
+                id="escalationMinutesBeforeCutOff"
+                name="escalationMinutesBeforeCutOff"
+                type="number"
+                min={0}
+                defaultValue={config.cadence.escalationMinutesBeforeCutOff ?? ''}
+                placeholder="Leave blank to disable"
+              />
             </div>
           </div>
           <label className="row" style={{ gap: '0.5rem', alignItems: 'center', marginTop: '0.75rem' }}>

@@ -23,21 +23,23 @@ interface AutomationLogRow {
 }
 
 /**
- * Weekday (0=Sunday..6=Saturday, matching Date#getDay) and hour of `at` as
- * seen in `timeZone`, using Intl instead of a date library so the scheduler
- * has no extra dependency. DST-aware because Intl resolves it per-instant.
+ * Weekday (0=Sunday..6=Saturday, matching Date#getDay), hour and minute of
+ * `at` as seen in `timeZone`, using Intl instead of a date library so the
+ * scheduler has no extra dependency. DST-aware because Intl resolves it per-instant.
  */
-export function timePartsIn(timeZone: string, at: Date): { dayOfWeek: number; hour: number } {
+export function timePartsIn(timeZone: string, at: Date): { dayOfWeek: number; hour: number; minute: number } {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone,
     weekday: 'short',
     hour: 'numeric',
+    minute: 'numeric',
     hourCycle: 'h23',
   }).formatToParts(at);
   const weekdayAbbr = parts.find((p) => p.type === 'weekday')?.value ?? 'Sun';
   const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? '0');
+  const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? '0');
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  return { dayOfWeek: Math.max(days.indexOf(weekdayAbbr), 0), hour };
+  return { dayOfWeek: Math.max(days.indexOf(weekdayAbbr), 0), hour, minute };
 }
 
 async function logAttempt(
@@ -72,8 +74,14 @@ async function shouldAttempt(db: Db, kind: AutomationKind, roundId: string, deta
 }
 
 async function autoDistribute(db: Db, cadence: CadenceConfig, now: Date): Promise<void> {
-  const { dayOfWeek, hour } = timePartsIn(cadence.timezone, now);
-  if (dayOfWeek !== cadence.distributionDayOfWeek || hour !== cadence.distributionHour) return;
+  const { dayOfWeek, hour, minute } = timePartsIn(cadence.timezone, now);
+  // A >= comparison, not ===, so this doesn't depend on the tick landing on
+  // the exact minute configured - it fires the first tick at or after the
+  // target time on the right day, and idempotency (distributionSentAt below)
+  // is what actually stops it firing again, not the time match.
+  const nowMinuteOfDay = hour * 60 + minute;
+  const targetMinuteOfDay = cadence.distributionHour * 60 + cadence.distributionMinute;
+  if (dayOfWeek !== cadence.distributionDayOfWeek || nowMinuteOfDay < targetMinuteOfDay) return;
 
   const drafts = (await listRounds(db)).filter((r) => r.status === 'DRAFT' && !r.distributionSentAt);
   for (const round of drafts) {
@@ -100,19 +108,19 @@ async function autoDistribute(db: Db, cadence: CadenceConfig, now: Date): Promis
 async function autoRemindAndEscalate(db: Db, cadence: CadenceConfig, now: Date): Promise<void> {
   const open = (await listRounds(db)).filter((r) => r.status === 'OPEN');
   for (const round of open) {
-    const hoursUntilCutOff = (new Date(round.cutOffAt).getTime() - now.getTime()) / 3_600_000;
-    if (hoursUntilCutOff < 0) continue; // past cut-off - autoClose handles it
+    const minutesUntilCutOff = (new Date(round.cutOffAt).getTime() - now.getTime()) / 60_000;
+    if (minutesUntilCutOff < 0) continue; // past cut-off - autoClose handles it
 
-    const thresholds: Array<{ kind: AutomationKind; hours: number }> = [
-      ...cadence.reminderHoursBeforeCutOff.map((hours) => ({ kind: 'REMIND' as const, hours })),
-      ...(cadence.escalationHoursBeforeCutOff !== null
-        ? [{ kind: 'ESCALATE' as const, hours: cadence.escalationHoursBeforeCutOff }]
+    const thresholds: Array<{ kind: AutomationKind; minutes: number }> = [
+      ...cadence.reminderMinutesBeforeCutOff.map((minutes) => ({ kind: 'REMIND' as const, minutes })),
+      ...(cadence.escalationMinutesBeforeCutOff !== null
+        ? [{ kind: 'ESCALATE' as const, minutes: cadence.escalationMinutesBeforeCutOff }]
         : []),
     ];
 
-    for (const { kind, hours } of thresholds) {
-      if (hoursUntilCutOff > hours) continue; // hasn't crossed this threshold yet
-      const detail = String(hours);
+    for (const { kind, minutes } of thresholds) {
+      if (minutesUntilCutOff > minutes) continue; // hasn't crossed this threshold yet
+      const detail = String(minutes);
       const { go, attempts } = await shouldAttempt(db, kind, round.id, detail);
       if (!go) continue;
 
@@ -134,7 +142,7 @@ async function autoRemindAndEscalate(db: Db, cadence: CadenceConfig, now: Date):
         const failed = results.filter((r) => r.status === 'FAILED').length;
         await logAttempt(db, kind, round.id, failed ? 'FAILED' : 'SUCCESS', detail, attempts, `${results.length - failed} sent, ${failed} failed`);
       } catch (err) {
-        logError(`automation.${kind.toLowerCase()}`, err, { roundId: round.id, threshold: hours, attempts });
+        logError(`automation.${kind.toLowerCase()}`, err, { roundId: round.id, threshold: minutes, attempts });
         await logAttempt(db, kind, round.id, 'FAILED', detail, attempts, err instanceof Error ? err.message : String(err));
       }
     }

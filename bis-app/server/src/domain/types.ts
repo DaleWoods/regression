@@ -96,11 +96,13 @@ export interface CadenceConfig {
   /** 0=Sunday .. 6=Saturday. Not hard-coded weekdays (§11). */
   distributionDayOfWeek: number;
   distributionHour: number;
+  distributionMinute: number;
   cutOffDayOfWeek: number;
   cutOffHour: number;
-  /** Hours before cut-off at which reminders fire, e.g. [48, 24, 4]. */
-  reminderHoursBeforeCutOff: number[];
-  escalationHoursBeforeCutOff: number | null;
+  cutOffMinute: number;
+  /** Minutes before cut-off at which reminders fire, e.g. [2880, 1440, 240] = 48h/24h/4h. Fine enough to test a whole cycle in minutes, not just run it for real in hours. */
+  reminderMinutesBeforeCutOff: number[];
+  escalationMinutesBeforeCutOff: number | null;
   timezone: string;
   /** Off by default: a fresh deployment shouldn't start emailing the committee on its own. */
   automationEnabled: boolean;
@@ -143,10 +145,12 @@ export const DEFAULT_SCORING_CONFIG: ScoringConfig = {
 export const DEFAULT_CADENCE_CONFIG: CadenceConfig = {
   distributionDayOfWeek: 4, // Thursday send, per the weekly rhythm in §11
   distributionHour: 9,
+  distributionMinute: 0,
   cutOffDayOfWeek: 2, // Tuesday cut-off (COP Tue)
   cutOffHour: 17,
-  reminderHoursBeforeCutOff: [48, 24, 4],
-  escalationHoursBeforeCutOff: 2,
+  cutOffMinute: 0,
+  reminderMinutesBeforeCutOff: [2880, 1440, 240], // 48h, 24h, 4h
+  escalationMinutesBeforeCutOff: 120, // 2h
   timezone: 'Europe/London',
   automationEnabled: false,
 };

@@ -102,8 +102,11 @@ if (isDirectRun) {
 
   // §11/§15: the cadence scheduler. Off unless Settings switches automation
   // on, and every tick is idempotent (see automationService), so this is
-  // safe to run on an interval rather than needing an external cron.
-  const AUTOMATION_INTERVAL_MS = 5 * 60 * 1000;
+  // safe to run on an interval rather than needing an external cron. Every
+  // minute, not every five, because reminder/escalation thresholds are now
+  // minutes-before-cut-off - a coarser tick would make a short test cycle
+  // (or a genuinely tight real cut-off) miss its own thresholds.
+  const AUTOMATION_INTERVAL_MS = 60 * 1000;
   const automationTimer = setInterval(() => {
     getDb()
       .then((db) => runAutomationTick(db))

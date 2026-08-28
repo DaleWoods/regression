@@ -69,10 +69,12 @@ const scoringSchema = z.object({
 const cadenceSchema = z.object({
   distributionDayOfWeek: z.number().int().min(0).max(6).optional(),
   distributionHour: z.number().int().min(0).max(23).optional(),
+  distributionMinute: z.number().int().min(0).max(59).optional(),
   cutOffDayOfWeek: z.number().int().min(0).max(6).optional(),
   cutOffHour: z.number().int().min(0).max(23).optional(),
-  reminderHoursBeforeCutOff: z.array(z.number().min(0)).optional(),
-  escalationHoursBeforeCutOff: z.number().min(0).nullable().optional(),
+  cutOffMinute: z.number().int().min(0).max(59).optional(),
+  reminderMinutesBeforeCutOff: z.array(z.number().min(0)).optional(),
+  escalationMinutesBeforeCutOff: z.number().min(0).nullable().optional(),
   timezone: z.string().optional(),
   automationEnabled: z.boolean().optional(),
 });

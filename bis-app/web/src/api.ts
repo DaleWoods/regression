@@ -155,10 +155,12 @@ export interface AppConfig {
   cadence: {
     distributionDayOfWeek: number;
     distributionHour: number;
+    distributionMinute: number;
     cutOffDayOfWeek: number;
     cutOffHour: number;
-    reminderHoursBeforeCutOff: number[];
-    escalationHoursBeforeCutOff: number | null;
+    cutOffMinute: number;
+    reminderMinutesBeforeCutOff: number[];
+    escalationMinutesBeforeCutOff: number | null;
     timezone: string;
     automationEnabled: boolean;
   };

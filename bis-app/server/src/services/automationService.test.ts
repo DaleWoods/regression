@@ -10,13 +10,13 @@ import { runAutomationTick, timePartsIn } from './automationService.js';
 describe('timePartsIn', () => {
   it('matches UTC fields directly in the UTC zone', () => {
     const at = new Date('2024-01-01T20:00:00Z'); // a Monday
-    expect(timePartsIn('UTC', at)).toEqual({ dayOfWeek: at.getUTCDay(), hour: at.getUTCHours() });
+    expect(timePartsIn('UTC', at)).toEqual({ dayOfWeek: at.getUTCDay(), hour: at.getUTCHours(), minute: 0 });
   });
 
   it('rolls the day over in a zone ahead of UTC (no DST, so the offset is exact)', () => {
     // Kiritimati is UTC+14 year-round. 2024-01-01 20:00 UTC (Monday) + 14h = 2024-01-02 10:00 local (Tuesday).
     const at = new Date('2024-01-01T20:00:00Z');
-    expect(timePartsIn('Pacific/Kiritimati', at)).toEqual({ dayOfWeek: 2, hour: 10 });
+    expect(timePartsIn('Pacific/Kiritimati', at)).toEqual({ dayOfWeek: 2, hour: 10, minute: 0 });
   });
 });
 
@@ -43,7 +43,7 @@ describe('runAutomationTick', () => {
 
   it('distributes a ready draft once the configured day/hour is reached, and only once', async () => {
     const db = await setUp();
-    await saveConfigSection(db, 'cadence', { automationEnabled: true, distributionDayOfWeek: 4, distributionHour: 9, timezone: 'UTC' }, 'test');
+    await saveConfigSection(db, 'cadence', { automationEnabled: true, distributionDayOfWeek: 4, distributionHour: 9, distributionMinute: 0, timezone: 'UTC' }, 'test');
     const round = await createRound(db, { weekLabel: 'Week 1', cutOffAt: new Date(Date.now() + 3_600_000).toISOString() });
     const ticket = await upsertTicket(db, { jiraId: 'BIS-2', title: 'Another ticket' });
     await addTicketToRound(db, round.id, ticket.id);
@@ -63,7 +63,7 @@ describe('runAutomationTick', () => {
 
   it('leaves an empty draft alone even at the distribution slot', async () => {
     const db = await setUp();
-    await saveConfigSection(db, 'cadence', { automationEnabled: true, distributionDayOfWeek: 4, distributionHour: 9, timezone: 'UTC' }, 'test');
+    await saveConfigSection(db, 'cadence', { automationEnabled: true, distributionDayOfWeek: 4, distributionHour: 9, distributionMinute: 0, timezone: 'UTC' }, 'test');
     const round = await createRound(db, { weekLabel: 'Empty week', cutOffAt: new Date(Date.now() + 3_600_000).toISOString() });
 
     await runAutomationTick(db, new Date('2024-01-04T09:15:00Z'));
@@ -83,21 +83,35 @@ describe('runAutomationTick', () => {
     expect(after?.status).toBe('CLOSED');
   });
 
-  it('sends a reminder once the configured hours-before-cutoff threshold is crossed, and only once', async () => {
+  it('sends a reminder once the configured minutes-before-cutoff threshold is crossed, and only once', async () => {
     const db = await setUp();
-    await saveConfigSection(db, 'cadence', { automationEnabled: true, reminderHoursBeforeCutOff: [24], escalationHoursBeforeCutOff: null }, 'test');
+    await saveConfigSection(db, 'cadence', { automationEnabled: true, reminderMinutesBeforeCutOff: [1440], escalationMinutesBeforeCutOff: null }, 'test');
     const round = await createRound(db, { weekLabel: 'Week 1', cutOffAt: new Date(Date.now() + 20 * 3_600_000).toISOString() });
     const { setRoundStatus } = await import('./roundService.js');
     await setRoundStatus(db, round.id, 'OPEN');
     const ticket = await upsertTicket(db, { jiraId: 'BIS-3', title: 'Needs a score' });
     await addTicketToRound(db, round.id, ticket.id);
 
-    await runAutomationTick(db, new Date()); // 20h < 24h threshold, so it should fire
+    await runAutomationTick(db, new Date()); // 20h < 24h (1440min) threshold, so it should fire
     const log1 = await db.all('SELECT * FROM automation_log WHERE kind = ? AND round_id = ?', ['REMIND', round.id]);
     expect(log1.length).toBe(1);
 
     await runAutomationTick(db, new Date()); // still under the same threshold - must not fire again
     const log2 = await db.all('SELECT * FROM automation_log WHERE kind = ? AND round_id = ?', ['REMIND', round.id]);
     expect(log2.length).toBe(1);
+  });
+
+  it('sends a reminder once a short minute-scale threshold is crossed, for fast end-to-end testing', async () => {
+    const db = await setUp();
+    await saveConfigSection(db, 'cadence', { automationEnabled: true, reminderMinutesBeforeCutOff: [5], escalationMinutesBeforeCutOff: null }, 'test');
+    const round = await createRound(db, { weekLabel: 'Week 1', cutOffAt: new Date(Date.now() + 3 * 60_000).toISOString() });
+    const { setRoundStatus } = await import('./roundService.js');
+    await setRoundStatus(db, round.id, 'OPEN');
+    const ticket = await upsertTicket(db, { jiraId: 'BIS-4', title: 'Needs a score' });
+    await addTicketToRound(db, round.id, ticket.id);
+
+    await runAutomationTick(db, new Date()); // 3min < 5min threshold, so it should fire
+    const log = await db.all('SELECT * FROM automation_log WHERE kind = ? AND round_id = ?', ['REMIND', round.id]);
+    expect(log.length).toBe(1);
   });
 });
