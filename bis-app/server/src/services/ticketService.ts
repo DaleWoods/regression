@@ -189,7 +189,7 @@ export async function upsertTicket(db: Db, input: TicketInput, options: { preser
     return (await getTicket(db, id)) as Ticket;
   }
 
-  // Coordinator-authored pack content (§7) is never overwritten by a JIRA re-sync.
+  // Coordinator-authored card content (§7) is never overwritten by a JIRA re-sync.
   const authored = new Set(['execSummary', 'panelCurrent', 'panelImpacts', 'panelFuture', 'panelBenefits', 'screenshotUrl']);
   const sets: string[] = [];
   const params: Array<string | number | null> = [];

@@ -59,12 +59,34 @@ function merge<T>(defaults: T, stored: unknown): T {
   return result as T;
 }
 
+/**
+ * `reminderHoursBeforeCutOff`/`escalationHoursBeforeCutOff` were renamed to
+ * their `...MinutesBeforeCutOff` equivalents when cadence gained minute
+ * precision. Without this, a previously-saved config's hour values would
+ * silently vanish behind the new defaults - `merge()` only overlays keys it
+ * recognises, so an old key just sits there unused while the new key falls
+ * back to DEFAULT_CADENCE_CONFIG.
+ */
+function migrateLegacyCadenceFields(stored: unknown): unknown {
+  if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return stored;
+  const obj = { ...(stored as Record<string, unknown>) };
+  if (Array.isArray(obj.reminderHoursBeforeCutOff) && obj.reminderMinutesBeforeCutOff === undefined) {
+    obj.reminderMinutesBeforeCutOff = obj.reminderHoursBeforeCutOff.map((hours) => Number(hours) * 60);
+  }
+  delete obj.reminderHoursBeforeCutOff;
+  if (obj.escalationHoursBeforeCutOff !== undefined && obj.escalationMinutesBeforeCutOff === undefined) {
+    obj.escalationMinutesBeforeCutOff = obj.escalationHoursBeforeCutOff === null ? null : Number(obj.escalationHoursBeforeCutOff) * 60;
+  }
+  delete obj.escalationHoursBeforeCutOff;
+  return obj;
+}
+
 export async function getAppConfig(db: Db): Promise<AppConfig> {
   const rows = await db.all<ConfigRow>('SELECT key, value FROM app_config');
   const stored = new Map(rows.map((r) => [r.key, safeParse(r.value)]));
   return {
     scoring: merge(DEFAULT_SCORING_CONFIG, stored.get('scoring')),
-    cadence: merge(DEFAULT_CADENCE_CONFIG, stored.get('cadence')),
+    cadence: merge(DEFAULT_CADENCE_CONFIG, migrateLegacyCadenceFields(stored.get('cadence'))),
     jira: merge(DEFAULT_JIRA_CONFIG, stored.get('jira')),
   };
 }

@@ -2,9 +2,8 @@ import type { Ticket } from '../api';
 import { formatDate } from '../api';
 
 /**
- * §7 ticket card - the in-app equivalent of one slide in the distribution deck:
- * header, executive summary (+ optional screenshot), the four labelled panels,
- * and the metadata strip. The PPTX/PDF pack is generated from the same fields.
+ * §7 ticket card: header, executive summary (+ optional screenshot), the
+ * four labelled panels, and the metadata strip.
  */
 export function TicketCard({ ticket, children }: { ticket: Ticket; children?: React.ReactNode }) {
   const panels: Array<[string, string]> = [

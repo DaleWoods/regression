@@ -1,6 +1,6 @@
 import { Db } from '../db/index.js';
 import { env } from '../config/env.js';
-import { MailAttachment, sendMail } from '../integrations/graph.js';
+import { sendMail } from '../integrations/graph.js';
 import { newId } from '../util/id.js';
 import { logWarn } from '../util/logger.js';
 import { formatUkDate, nowIso } from '../util/time.js';
@@ -80,23 +80,17 @@ async function logEmail(
   );
 }
 
-/** Distribution email: round opened, link to the in-app round + optional pack (§12.2). */
+/** Distribution email: round opened, link to the in-app round to score (§12.2). */
 export async function sendDistribution(
   db: Db,
   round: Round,
   tickets: Ticket[],
   recipients: Member[],
-  attachment?: MailAttachment,
 ): Promise<EmailResult[]> {
   const results: EmailResult[] = [];
   for (const member of recipients) {
     const { subject, html } = buildDistributionEmail(round, tickets, member);
-    const outcome = await sendMail({
-      to: [member.email],
-      subject,
-      html,
-      attachments: attachment ? [attachment] : undefined,
-    });
+    const outcome = await sendMail({ to: [member.email], subject, html });
     await logEmail(db, {
       roundId: round.id,
       memberId: member.id,
