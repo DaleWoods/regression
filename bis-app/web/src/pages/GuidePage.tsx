@@ -107,6 +107,17 @@ export function GuidePage() {
           </li>
         </ul>
         <p>
+          Each slider shows a rough reference point (minor / moderate / significant) between the 0 and 10 labels, so
+          picking a number in the middle isn't a guess. The ticket's four detail panels (Current, Impacts, Future,
+          Benefits) start collapsed behind a "Show details" button — the executive summary above them is meant to be
+          enough on its own for most tickets; expand for the full detail when you need it.
+        </p>
+        <p>
+          When you open a round, you'll see roughly how long the tickets left to score will take, how many of the
+          committee have already responded, and your own streak over recent rounds — all just for context, not a
+          target to hit.
+        </p>
+        <p>
           You can change your answer for a ticket as many times as you like until the round's cut-off. Your answers
           save automatically a few seconds after each change — there's no need to click a button after every ticket
           — and the button on each ticket still saves immediately if you want to be sure before moving on. Once the

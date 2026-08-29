@@ -1,8 +1,21 @@
 import { useEffect, useState } from 'react';
-import { api, formatDateTime, type Category, type Member, type Relevance, type Round, type Submission, type Ticket } from '../api';
+import {
+  api,
+  formatDateTime,
+  type Category,
+  type Member,
+  type MemberParticipation,
+  type Relevance,
+  type Round,
+  type Submission,
+  type Ticket,
+} from '../api';
 import { TicketCard } from '../components/TicketCard';
 import { ScoreForm } from '../components/ScoreForm';
 import { Link } from '../router';
+
+/** A rough per-ticket estimate, purely to set expectations up front - not a promise. */
+const SECONDS_PER_TICKET = 45;
 
 interface Props {
   member: Member;
@@ -21,6 +34,8 @@ export function ScorePage({ member, roundId }: Props) {
   const [relevanceOptions, setRelevanceOptions] = useState<Array<{ value: Relevance; label: string }>>([]);
   const [closureReasons, setClosureReasons] = useState<string[]>([]);
   const [lastFinalisedRound, setLastFinalisedRound] = useState<Round | null>(null);
+  const [participation, setParticipation] = useState<{ respondedCount: number; totalScorers: number } | null>(null);
+  const [myParticipation, setMyParticipation] = useState<MemberParticipation | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -40,6 +55,8 @@ export function ScorePage({ member, roundId }: Props) {
         setCategories(data.categories);
         setSubmissions(data.submissions);
         setLastFinalisedRound('lastFinalisedRound' in data ? (data.lastFinalisedRound ?? null) : null);
+        setParticipation(data.participation ?? null);
+        setMyParticipation(data.myParticipation ?? null);
         setError('');
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load the round');
@@ -72,6 +89,7 @@ export function ScorePage({ member, roundId }: Props) {
 
   const done = submissions.length;
   const outstanding = Math.max(tickets.length - done, 0);
+  const estimatedMinutes = outstanding > 0 ? Math.max(1, Math.round((outstanding * SECONDS_PER_TICKET) / 60)) : 0;
 
   function scrollToTicket(ticketId: string) {
     document.getElementById(`ticket-${ticketId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -92,8 +110,26 @@ export function ScorePage({ member, roundId }: Props) {
 
       <div className="notice" role="status">
         You have scored <strong>{done}</strong> of <strong>{tickets.length}</strong> tickets
-        {outstanding > 0 ? ` — ${outstanding} to go.` : ' — all done, thank you.'}
+        {outstanding > 0 ? (
+          <>
+            {' '}
+            — {outstanding} to go, about <strong>{estimatedMinutes} min</strong>.
+          </>
+        ) : (
+          ' — all done, thank you.'
+        )}
       </div>
+
+      {participation || myParticipation ? (
+        <p className="hint" style={{ marginTop: '-0.5rem', marginBottom: '1rem' }}>
+          {participation
+            ? `${participation.respondedCount} of ${participation.totalScorers} committee members have responded to this round so far. `
+            : ''}
+          {myParticipation && myParticipation.roundsAvailable > 0
+            ? `You've scored ${myParticipation.roundsScored} of the last ${myParticipation.roundsAvailable} round${myParticipation.roundsAvailable === 1 ? '' : 's'}.`
+            : ''}
+        </p>
+      ) : null}
 
       {!scoringOpen ? (
         <div className="notice warn">

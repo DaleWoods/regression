@@ -9,6 +9,15 @@ function initialScores(categories: Category[], submission?: Submission): Record<
   return initial;
 }
 
+/** Rough reference points between a category's zero/max labels, so a score in the middle isn't a guess. */
+function scaleAnchors(category: Category): string {
+  const range = category.scaleMax - category.scaleMin;
+  const low = Math.round(category.scaleMin + range * 0.25);
+  const mid = Math.round(category.scaleMin + range * 0.5);
+  const high = Math.round(category.scaleMin + range * 0.75);
+  return `≈${low} minor · ≈${mid} moderate · ≈${high} significant`;
+}
+
 interface FormSnapshot {
   relevance: Relevance;
   scores: Record<string, number>;
@@ -174,6 +183,7 @@ export function ScoreForm({
                     <span className="cat-desc">
                       {category.scaleMin} = {category.zeroLabel} · {category.scaleMax} = {category.maxLabel}
                     </span>
+                    <span className="cat-desc scale-anchors">{scaleAnchors(category)}</span>
                   </label>
                   <input
                     id={inputId}

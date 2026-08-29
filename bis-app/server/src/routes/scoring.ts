@@ -1,17 +1,35 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { getDb } from '../db/index.js';
+import { Db, getDb } from '../db/index.js';
 import { requireAuth } from '../auth/middleware.js';
 import { RELEVANCE_VALUES, isCoordinator } from '../domain/types.js';
 import { isValidSubmission } from '../domain/scoring.js';
 import { audit } from '../services/auditService.js';
 import { getScoringConfig, listCategories } from '../services/configService.js';
+import { listActiveScorers, memberParticipation } from '../services/memberService.js';
 import { getActiveRound, getLastFinalisedRound, getRound, isScoringOpen, listRoundTickets } from '../services/roundService.js';
-import { listMemberSubmissions, saveSubmission, toScoringInput } from '../services/submissionService.js';
+import { listMemberSubmissions, roundProgress, saveSubmission, toScoringInput } from '../services/submissionService.js';
 import { getTicket } from '../services/ticketService.js';
 import { actorOf, asyncHandler } from './helpers.js';
 
 const router = Router();
+
+/**
+ * Social proof for a member's own scoring page: how many of the round's
+ * active scorers have responded at all (a count, never who or what they
+ * answered - that stays coordinator-only per §9), plus this member's own
+ * recent-rounds streak, which is fine to show them since it's about them.
+ */
+async function memberFacingStats(db: Db, roundId: string, ticketCount: number, memberId: string) {
+  const scorers = await listActiveScorers(db);
+  const progress = await roundProgress(db, roundId, scorers, ticketCount);
+  const respondedCount = progress.filter((p) => p.submitted > 0).length;
+  const myParticipation = (await memberParticipation(db, [memberId]))[0] ?? null;
+  return {
+    participation: { respondedCount, totalScorers: scorers.length },
+    myParticipation,
+  };
+}
 
 /**
  * The committee member's scoring surface: the open round, its ticket cards, and
@@ -37,12 +55,15 @@ router.get(
       });
       return;
     }
+    const tickets = await listRoundTickets(db, round.id);
+    const stats = await memberFacingStats(db, round.id, tickets.length, req.member!.id);
     res.json({
       round,
       scoringOpen: isScoringOpen(round),
-      tickets: await listRoundTickets(db, round.id),
+      tickets,
       submissions: await listMemberSubmissions(db, round.id, req.member!.id),
       categories: await listCategories(db),
+      ...stats,
     });
   }),
 );
@@ -61,12 +82,15 @@ router.get(
       res.status(403).json({ error: 'This round has not been distributed yet' });
       return;
     }
+    const tickets = await listRoundTickets(db, round.id);
+    const stats = await memberFacingStats(db, round.id, tickets.length, req.member!.id);
     res.json({
       round,
       scoringOpen: isScoringOpen(round),
-      tickets: await listRoundTickets(db, round.id),
+      tickets,
       submissions: await listMemberSubmissions(db, round.id, req.member!.id),
       categories: await listCategories(db),
+      ...stats,
     });
   }),
 );

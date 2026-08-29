@@ -238,9 +238,19 @@ export const api = {
       submissions: Submission[];
       categories: Category[];
       lastFinalisedRound?: Round | null;
+      participation?: { respondedCount: number; totalScorers: number };
+      myParticipation?: MemberParticipation | null;
     }>('/api/my/round'),
   myRoundSubmissions: (roundId: string) =>
-    request<{ round: Round; scoringOpen: boolean; tickets: Ticket[]; submissions: Submission[]; categories: Category[] }>(
+    request<{
+      round: Round;
+      scoringOpen: boolean;
+      tickets: Ticket[];
+      submissions: Submission[];
+      categories: Category[];
+      participation?: { respondedCount: number; totalScorers: number };
+      myParticipation?: MemberParticipation | null;
+    }>(
       `/api/rounds/${roundId}/my-submissions`,
     ),
   saveSubmission: (

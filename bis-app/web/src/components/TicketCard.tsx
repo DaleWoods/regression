@@ -1,11 +1,15 @@
+import { useState } from 'react';
 import type { Ticket } from '../api';
 import { formatDate } from '../api';
 
 /**
- * §7 ticket card: header, executive summary (+ optional screenshot), the
- * four labelled panels, and the metadata strip.
+ * §7 ticket card: header, executive summary (+ optional screenshot) always
+ * visible, the four labelled panels collapsed behind a toggle so the
+ * summary has to do its job and a long round doesn't read as a wall of
+ * text, and the metadata strip.
  */
 export function TicketCard({ ticket, children }: { ticket: Ticket; children?: React.ReactNode }) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const panels: Array<[string, string]> = [
     ['Current', ticket.panelCurrent],
     ['Impacts', ticket.panelImpacts],
@@ -44,22 +48,35 @@ export function TicketCard({ ticket, children }: { ticket: Ticket; children?: Re
           ) : null}
         </div>
 
-        <div className="panels">
-          {panels.map(([label, value]) => (
-            <section className="panel" key={label}>
-              <h4>{label}</h4>
-              <p>{value || '—'}</p>
-            </section>
-          ))}
-        </div>
+        <button
+          type="button"
+          className="secondary details-toggle"
+          onClick={() => setDetailsOpen((open) => !open)}
+          aria-expanded={detailsOpen}
+        >
+          {detailsOpen ? 'Hide details' : 'Show details'}
+        </button>
 
-        <div className="metadata">
-          {metadata.map(([label, value]) => (
-            <span key={label}>
-              <strong>{label}:</strong> {value || '—'}
-            </span>
-          ))}
-        </div>
+        {detailsOpen ? (
+          <>
+            <div className="panels">
+              {panels.map(([label, value]) => (
+                <section className="panel" key={label}>
+                  <h4>{label}</h4>
+                  <p>{value || '—'}</p>
+                </section>
+              ))}
+            </div>
+
+            <div className="metadata">
+              {metadata.map(([label, value]) => (
+                <span key={label}>
+                  <strong>{label}:</strong> {value || '—'}
+                </span>
+              ))}
+            </div>
+          </>
+        ) : null}
 
         {children}
       </div>

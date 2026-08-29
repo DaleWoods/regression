@@ -435,6 +435,9 @@ legend {
   font-size: 0.82rem;
   display: block;
 }
+.score-row .scale-anchors {
+  font-style: italic;
+}
 .score-row input[type='range'] {
   width: 100%;
 }
@@ -514,6 +517,11 @@ legend {
 .progress-badge.pending {
   border-color: var(--brand);
   color: var(--brand-dark);
+}
+
+.details-toggle {
+  margin: 0.4rem 0 0.75rem;
+  font-size: 0.85rem;
 }
 
 .quality-flag {
