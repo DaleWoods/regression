@@ -108,9 +108,7 @@ export function GuidePage() {
         </ul>
         <p>
           Each slider shows a rough reference point (minor / moderate / significant) between the 0 and 10 labels, so
-          picking a number in the middle isn't a guess. The ticket's four detail panels (Current, Impacts, Future,
-          Benefits) start collapsed behind a "Show details" button — the executive summary above them is meant to be
-          enough on its own for most tickets; expand for the full detail when you need it.
+          picking a number in the middle isn't a guess.
         </p>
         <p>
           When you open a round, you'll see roughly how long the tickets left to score will take, how many of the

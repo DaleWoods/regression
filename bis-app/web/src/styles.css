@@ -519,11 +519,6 @@ legend {
   color: var(--brand-dark);
 }
 
-.details-toggle {
-  margin: 0.4rem 0 0.75rem;
-  font-size: 0.85rem;
-}
-
 .quality-flag {
   color: var(--medium);
   font-weight: 600;
