@@ -20,6 +20,7 @@ export interface Submission {
   moreInfo: string;
   archived: boolean;
   scores: Record<string, number>;
+  durationMs: number | null;
   submittedAt: string;
   updatedAt: string;
 }
@@ -35,6 +36,7 @@ interface SubmissionRow {
   closure_info: string;
   more_info: string;
   archived: number;
+  duration_ms: number | null;
   submitted_at: string;
   updated_at: string;
 }
@@ -52,6 +54,7 @@ function map(row: SubmissionRow, scores: Record<string, number>): Submission {
     moreInfo: row.more_info,
     archived: Number(row.archived) === 1,
     scores,
+    durationMs: row.duration_ms === null || row.duration_ms === undefined ? null : Number(row.duration_ms),
     submittedAt: row.submitted_at,
     updatedAt: row.updated_at,
   };
@@ -118,6 +121,8 @@ export interface SubmissionPayload {
   closureReason?: string;
   closureInfo?: string;
   moreInfo?: string;
+  /** Milliseconds since the scoring form opened, as of this save (§9 rubber-stamp signal). */
+  durationMs?: number;
 }
 
 /**
@@ -202,15 +207,18 @@ export async function saveSubmission(
 
   const id = existing?.id ?? newId();
   await db.tx(async (tx) => {
+    const durationMs = payload.durationMs !== undefined && Number.isFinite(payload.durationMs) ? Math.round(payload.durationMs) : null;
+
     if (existing) {
       await tx.run(
-        `UPDATE submissions SET relevance = ?, closure_reason = ?, closure_info = ?, more_info = ?, updated_at = ?
+        `UPDATE submissions SET relevance = ?, closure_reason = ?, closure_info = ?, more_info = ?, duration_ms = ?, updated_at = ?
          WHERE id = ?`,
         [
           payload.relevance,
           payload.closureReason ?? '',
           payload.closureInfo ?? '',
           payload.moreInfo ?? '',
+          durationMs,
           now,
           id,
         ],
@@ -218,8 +226,8 @@ export async function saveSubmission(
       await tx.run('DELETE FROM submission_scores WHERE submission_id = ?', [id]);
     } else {
       await tx.run(
-        `INSERT INTO submissions (id, round_id, ticket_id, member_id, relevance, closure_reason, closure_info, more_info, archived, submitted_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+        `INSERT INTO submissions (id, round_id, ticket_id, member_id, relevance, closure_reason, closure_info, more_info, archived, duration_ms, submitted_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
         [
           id,
           round.id,
@@ -229,6 +237,7 @@ export async function saveSubmission(
           payload.closureReason ?? '',
           payload.closureInfo ?? '',
           payload.moreInfo ?? '',
+          durationMs,
           now,
           now,
         ],

@@ -107,9 +107,15 @@ export function GuidePage() {
           </li>
         </ul>
         <p>
-          You can change your answer for a ticket as many times as you like until the round's cut-off — take the
-          time before you submit, but nothing is locked in early. Once the cut-off passes, the form disables itself
-          for that round.
+          You can change your answer for a ticket as many times as you like until the round's cut-off. Your answers
+          save automatically a few seconds after each change — there's no need to click a button after every ticket
+          — and the button on each ticket still saves immediately if you want to be sure before moving on. Once the
+          cut-off passes, the form disables itself for that round.
+        </p>
+        <p>
+          When a round has more than one ticket, a bar at the top shows every ticket in the round as a small badge —
+          green once you've scored it — so you can click straight to whichever one you haven't done yet, or use
+          "Jump to next unscored" to skip ahead.
         </p>
       </Section>
 
@@ -181,6 +187,12 @@ export function GuidePage() {
           The results table on the round page is live while the round is open — responses, business score, spread
           and priority band update as scores come in, so there's no need to wait for the round to close to see how
           it's shaping up.
+        </p>
+        <p>
+          The submission progress table's <strong>Quality</strong> column flags two things worth a second look,
+          purely for your own judgement — nothing here blocks a submission: a member scoring every category
+          identically on a ticket, and a save that landed suspiciously soon after the form was opened. Hover the
+          flag to see which tickets triggered it.
         </p>
         <p>
           Distributing, chasing, escalating and closing can also run on a schedule — switch on "Run this on a

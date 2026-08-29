@@ -73,6 +73,27 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
   const scored = results.filter((r) => r.aggregate.responsesCount > 0).length;
   const readyForEstimation = results.filter((r) => r.aggregate.sendForEstimation).length;
 
+  // §9 rubber-stamp signals: never blocks a submission, just surfaced here
+  // for the coordinator to spot-check. Identical scores across every
+  // category, or a save that took implausibly little time.
+  const FAST_SUBMISSION_MS = 5000;
+  const memberFlags = new Map<string, string[]>();
+  for (const submission of submissions) {
+    const flags: string[] = [];
+    if (submission.relevance === 'YES' && categories.length > 1) {
+      const values = categories.map((c) => submission.scores[c.id]);
+      if (values.every((v) => v !== undefined && v === values[0])) flags.push(`all categories scored ${values[0]}`);
+    }
+    if (submission.durationMs !== null && submission.durationMs < FAST_SUBMISSION_MS) {
+      flags.push(`saved ${(submission.durationMs / 1000).toFixed(1)}s after opening`);
+    }
+    if (!flags.length) continue;
+    const ticket = tickets.find((t) => t.id === submission.ticketId);
+    const existing = memberFlags.get(submission.memberId) ?? [];
+    existing.push(`${ticket?.jiraId ?? submission.ticketId}: ${flags.join(', ')}`);
+    memberFlags.set(submission.memberId, existing);
+  }
+
   return (
     <>
       <div className="row between">
@@ -212,11 +233,13 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
               </th>
               <th scope="col">Last submitted</th>
               <th scope="col">Recent participation</th>
+              <th scope="col">Quality</th>
             </tr>
           </thead>
           <tbody>
             {progress.map((row) => {
               const history = participation.find((p) => p.memberId === row.memberId);
+              const flags = memberFlags.get(row.memberId);
               return (
                 <tr key={row.memberId}>
                   <th scope="row" style={{ background: 'transparent', textTransform: 'none', letterSpacing: 0, fontSize: '0.95rem', color: 'inherit' }}>
@@ -240,12 +263,21 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
                       ? `Scored ${history.roundsScored} of the last ${history.roundsAvailable} round${history.roundsAvailable === 1 ? '' : 's'}`
                       : '—'}
                   </td>
+                  <td>
+                    {flags?.length ? (
+                      <span className="quality-flag" title={flags.join('\n')}>
+                        ⚠ {flags.length} flagged
+                      </span>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
                 </tr>
               );
             })}
             {!progress.length ? (
               <tr>
-                <td colSpan={6}>No active committee members.</td>
+                <td colSpan={7}>No active committee members.</td>
               </tr>
             ) : null}
           </tbody>

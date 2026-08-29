@@ -77,6 +77,7 @@ const submissionSchema = z.object({
   closureReason: z.string().optional(),
   closureInfo: z.string().optional(),
   moreInfo: z.string().optional(),
+  durationMs: z.number().min(0).optional(),
 });
 
 /**

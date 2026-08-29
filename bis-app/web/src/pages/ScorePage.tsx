@@ -73,6 +73,15 @@ export function ScorePage({ member, roundId }: Props) {
   const done = submissions.length;
   const outstanding = Math.max(tickets.length - done, 0);
 
+  function scrollToTicket(ticketId: string) {
+    document.getElementById(`ticket-${ticketId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function jumpToNextUnscored() {
+    const next = tickets.find((t) => !submissions.some((s) => s.ticketId === t.id));
+    if (next) scrollToTicket(next.id);
+  }
+
   return (
     <>
       <h1>{round.weekLabel}</h1>
@@ -92,25 +101,53 @@ export function ScorePage({ member, roundId }: Props) {
         </div>
       ) : null}
 
+      {scoringOpen && tickets.length > 1 ? (
+        <nav className="progress-rail" aria-label="Ticket progress">
+          <div className="progress-rail-badges">
+            {tickets.map((ticket) => {
+              const isDone = submissions.some((s) => s.ticketId === ticket.id);
+              return (
+                <button
+                  key={ticket.id}
+                  type="button"
+                  className={`progress-badge ${isDone ? 'done' : 'pending'}`}
+                  onClick={() => scrollToTicket(ticket.id)}
+                  title={`${ticket.jiraId} — ${isDone ? 'scored' : 'not yet scored'}`}
+                >
+                  {ticket.jiraId}
+                </button>
+              );
+            })}
+          </div>
+          {outstanding > 0 ? (
+            <button type="button" className="secondary" onClick={jumpToNextUnscored}>
+              Jump to next unscored ({outstanding} left)
+            </button>
+          ) : null}
+        </nav>
+      ) : null}
+
       {tickets.map((ticket) => {
         const submission = submissions.find((s) => s.ticketId === ticket.id);
         return (
-          <TicketCard ticket={ticket} key={ticket.id}>
-            <ScoreForm
-              ticket={ticket}
-              categories={categories}
-              relevanceOptions={relevanceOptions}
-              closureReasons={closureReasons}
-              submission={submission}
-              memberEmail={member.email}
-              disabled={!scoringOpen}
-              disabledReason="Scoring is closed for this round."
-              onSave={async (payload) => {
-                const { submission: saved } = await api.saveSubmission(round.id, ticket.id, payload);
-                setSubmissions((current) => [...current.filter((s) => s.ticketId !== ticket.id), saved]);
-              }}
-            />
-          </TicketCard>
+          <div id={`ticket-${ticket.id}`} key={ticket.id}>
+            <TicketCard ticket={ticket}>
+              <ScoreForm
+                ticket={ticket}
+                categories={categories}
+                relevanceOptions={relevanceOptions}
+                closureReasons={closureReasons}
+                submission={submission}
+                memberEmail={member.email}
+                disabled={!scoringOpen}
+                disabledReason="Scoring is closed for this round."
+                onSave={async (payload) => {
+                  const { submission: saved } = await api.saveSubmission(round.id, ticket.id, payload);
+                  setSubmissions((current) => [...current.filter((s) => s.ticketId !== ticket.id), saved]);
+                }}
+              />
+            </TicketCard>
+          </div>
         );
       })}
     </>

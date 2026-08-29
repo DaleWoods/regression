@@ -1,5 +1,21 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Category, Relevance, Submission, Ticket } from '../api';
+
+const AUTOSAVE_DELAY_MS = 900;
+
+function initialScores(categories: Category[], submission?: Submission): Record<string, number> {
+  const initial: Record<string, number> = {};
+  for (const category of categories) initial[category.id] = submission?.scores?.[category.id] ?? 0;
+  return initial;
+}
+
+interface FormSnapshot {
+  relevance: Relevance;
+  scores: Record<string, number>;
+  closureReason: string;
+  closureInfo: string;
+  moreInfo: string;
+}
 
 interface Props {
   ticket: Ticket;
@@ -16,6 +32,7 @@ interface Props {
     closureReason?: string;
     closureInfo?: string;
     moreInfo?: string;
+    durationMs?: number;
   }) => Promise<void>;
 }
 
@@ -35,41 +52,75 @@ export function ScoreForm({
   onSave,
 }: Props) {
   const [relevance, setRelevance] = useState<Relevance>(submission?.relevance ?? 'YES');
-  const [scores, setScores] = useState<Record<string, number>>(() => {
-    const initial: Record<string, number> = {};
-    for (const category of categories) initial[category.id] = submission?.scores?.[category.id] ?? 0;
-    return initial;
-  });
+  const [scores, setScores] = useState<Record<string, number>>(() => initialScores(categories, submission));
   const [closureReason, setClosureReason] = useState(submission?.closureReason ?? '');
   const [closureInfo, setClosureInfo] = useState(submission?.closureInfo ?? '');
   const [moreInfo, setMoreInfo] = useState(submission?.moreInfo ?? '');
   const [status, setStatus] = useState<{ tone: 'saved' | 'error' | ''; message: string }>({ tone: '', message: '' });
   const [saving, setSaving] = useState(false);
 
+  // When the form was opened, so a save can report how long it took (§9
+  // rubber-stamp signal) - and the baseline snapshot autosave compares
+  // against, so a ticket nobody has touched never saves on its own.
+  const mountedAt = useRef(Date.now());
+  const savedSnapshotRef = useRef<string | null>(null);
+  if (savedSnapshotRef.current === null) {
+    savedSnapshotRef.current = JSON.stringify({
+      relevance: submission?.relevance ?? 'YES',
+      scores: initialScores(categories, submission),
+      closureReason: submission?.closureReason ?? '',
+      closureInfo: submission?.closureInfo ?? '',
+      moreInfo: submission?.moreInfo ?? '',
+    });
+  }
+
   const isRequestor = Boolean(ticket.originalRequestor) && ticket.originalRequestor.toLowerCase() === memberEmail.toLowerCase();
   const total = useMemo(
     () => categories.reduce((sum, category) => sum + (Number(scores[category.id]) || 0), 0),
     [categories, scores],
   );
+  const needsReason = relevance === 'NO_CLOSE' || relevance === 'NO_NOT_RELEVANT_TODAY';
+  const snapshot: FormSnapshot = { relevance, scores, closureReason, closureInfo, moreInfo };
+  const snapshotJson = JSON.stringify(snapshot);
 
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
+  async function persist(snapshotJson: string, current: FormSnapshot) {
     setSaving(true);
     setStatus({ tone: '', message: '' });
     try {
       await onSave({
-        relevance,
-        scores: relevance === 'YES' ? scores : undefined,
-        closureReason: closureReason || undefined,
-        closureInfo: closureInfo || undefined,
-        moreInfo: moreInfo || undefined,
+        relevance: current.relevance,
+        scores: current.relevance === 'YES' ? current.scores : undefined,
+        closureReason: current.closureReason || undefined,
+        closureInfo: current.closureInfo || undefined,
+        moreInfo: current.moreInfo || undefined,
+        durationMs: Date.now() - mountedAt.current,
       });
+      savedSnapshotRef.current = snapshotJson;
       setStatus({ tone: 'saved', message: 'Saved. You can change your answer until the cut-off.' });
     } catch (err) {
       setStatus({ tone: 'error', message: err instanceof Error ? err.message : 'Could not save' });
     } finally {
       setSaving(false);
     }
+  }
+
+  // Autosaves a few seconds after the last change, so scoring many tickets
+  // doesn't mean clicking a submit button after every single one - the
+  // button below still exists for an explicit, immediate save.
+  useEffect(() => {
+    if (disabled) return;
+    if (needsReason && !closureReason.trim()) return; // not valid to save yet
+    if (snapshotJson === savedSnapshotRef.current) return; // nothing new
+    const timer = setTimeout(() => {
+      persist(snapshotJson, snapshot);
+    }, AUTOSAVE_DELAY_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [disabled, snapshotJson]);
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    await persist(snapshotJson, snapshot);
   }
 
   const groupName = `relevance-${ticket.id}`;
@@ -185,7 +236,10 @@ export function ScoreForm({
         <button type="submit" disabled={disabled || saving}>
           {saving ? 'Saving…' : submission ? 'Update my score' : 'Submit my score'}
         </button>
-        {submission ? <span className="hint">Last saved {new Date(submission.updatedAt).toLocaleString('en-GB')}</span> : null}
+        <span className="hint">
+          {submission ? `Last saved ${new Date(submission.updatedAt).toLocaleString('en-GB')}. ` : ''}
+          Saves automatically a few seconds after each change — the button saves immediately.
+        </span>
       </div>
 
       <p className={`status ${status.tone}`} role="status" aria-live="polite">

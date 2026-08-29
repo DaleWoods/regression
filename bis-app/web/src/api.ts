@@ -83,6 +83,7 @@ export interface Submission {
   closureInfo: string;
   moreInfo: string;
   scores: Record<string, number>;
+  durationMs: number | null;
   updatedAt: string;
 }
 
@@ -245,7 +246,14 @@ export const api = {
   saveSubmission: (
     roundId: string,
     ticketId: string,
-    payload: { relevance: Relevance; scores?: Record<string, number>; closureReason?: string; closureInfo?: string; moreInfo?: string },
+    payload: {
+      relevance: Relevance;
+      scores?: Record<string, number>;
+      closureReason?: string;
+      closureInfo?: string;
+      moreInfo?: string;
+      durationMs?: number;
+    },
   ) =>
     request<{ submission: Submission }>(`/api/rounds/${roundId}/tickets/${ticketId}/submission`, {
       method: 'PUT',
