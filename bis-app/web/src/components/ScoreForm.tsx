@@ -58,6 +58,10 @@ export function ScoreForm({
   const [moreInfo, setMoreInfo] = useState(submission?.moreInfo ?? '');
   const [status, setStatus] = useState<{ tone: 'saved' | 'error' | ''; message: string }>({ tone: '', message: '' });
   const [saving, setSaving] = useState(false);
+  // Which category sliders the member has actually touched this visit - an
+  // already-saved submission counts every category as touched, but a fresh
+  // ticket starts empty so autosave can't fire on an untouched default of 0.
+  const [touched, setTouched] = useState<Set<string>>(() => (submission ? new Set(categories.map((c) => c.id)) : new Set()));
 
   // When the form was opened, so a save can report how long it took (§9
   // rubber-stamp signal) - and the baseline snapshot autosave compares
@@ -110,13 +114,17 @@ export function ScoreForm({
   useEffect(() => {
     if (disabled) return;
     if (needsReason && !closureReason.trim()) return; // not valid to save yet
+    // A "Yes" needs every category actually looked at before it autosaves -
+    // otherwise nudging one slider would silently save the other six at
+    // their untouched default of 0 as if they'd been judged.
+    if (relevance === 'YES' && touched.size < categories.length) return;
     if (snapshotJson === savedSnapshotRef.current) return; // nothing new
     const timer = setTimeout(() => {
       persist(snapshotJson, snapshot);
     }, AUTOSAVE_DELAY_MS);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [disabled, snapshotJson]);
+  }, [disabled, snapshotJson, touched]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -175,6 +183,7 @@ export function ScoreForm({
                     step={1}
                     value={scores[category.id] ?? 0}
                     onChange={(event) => setScores({ ...scores, [category.id]: Number(event.target.value) })}
+                    onFocus={() => setTouched((prev) => (prev.has(category.id) ? prev : new Set(prev).add(category.id)))}
                     aria-describedby={`${inputId}-out`}
                   />
                   <output id={`${inputId}-out`} htmlFor={inputId}>
@@ -187,6 +196,12 @@ export function ScoreForm({
           <p className="total-line">
             Your total for this ticket: {total} / {categories.reduce((sum, c) => sum + c.scaleMax, 0)}
           </p>
+          {touched.size < categories.length ? (
+            <p className="hint">
+              Autosave turns on once you've looked at every category ({touched.size} of {categories.length} so far).
+              Use the button below to save sooner if you need to.
+            </p>
+          ) : null}
         </fieldset>
       ) : null}
 
