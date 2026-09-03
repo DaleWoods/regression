@@ -1,0 +1,43 @@
+:root { --brand: #12284b; }
+* { box-sizing: border-box; }
+body { font-family: 'Helvetica Neue', Arial, sans-serif; margin: 0; background: #f4f4f2; color: #222; }
+
+.app-header { display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 24px; background: #1a1a1a; color: #fff; }
+.app-header h1 { font-size: 16px; margin: 0; letter-spacing: .06em; text-transform: uppercase; }
+
+.tabs { display: flex; gap: 4px; padding: 12px 24px 0; }
+.tab { display: flex; align-items: center; gap: 8px; padding: 10px 18px; border: none;
+  border-radius: 8px 8px 0 0; background: #e4e4e0; cursor: pointer; font-size: 14px;
+  font-weight: 600; color: #444; border-bottom: 3px solid transparent; }
+.tab img { height: 20px; }
+.tab.active { background: #fff; color: var(--tab-colour, #222);
+  border-bottom-color: var(--tab-colour, #222); }
+
+.panel { background: #fff; margin: 0 24px 24px; border-radius: 0 8px 8px 8px;
+  padding: 20px 24px; min-height: 60vh; border-top: 4px solid var(--brand); }
+
+.toolbar { display: flex; align-items: center; gap: 16px; padding-bottom: 16px;
+  border-bottom: 1px solid #eee; margin-bottom: 20px; flex-wrap: wrap; }
+.brand-logo { height: 36px; }
+.toolbar-info { flex: 1; min-width: 200px; }
+.brand-name { font-weight: 700; font-size: 18px; color: var(--brand); }
+.scan-meta { font-size: 12px; color: #888; margin-top: 2px; }
+.toolbar-actions { display: flex; align-items: center; gap: 12px; }
+
+.status { font-size: 13px; color: #666; min-width: 160px; text-align: right; }
+.status.running::before { content: ''; display: inline-block; width: 12px; height: 12px;
+  margin-right: 6px; border: 2px solid var(--brand); border-top-color: transparent;
+  border-radius: 50%; animation: spin 1s linear infinite; vertical-align: -2px; }
+.status.error { color: #a93226; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+button.primary, a.button { padding: 9px 18px; border: none; border-radius: 6px;
+  background: var(--brand); color: #fff; font-size: 14px; font-weight: 600; cursor: pointer;
+  text-decoration: none; display: inline-block; }
+button.primary:disabled { opacity: .5; cursor: default; }
+a.button { background: #fff; color: var(--brand); border: 1px solid var(--brand); }
+button.ghost { background: transparent; color: #bbb; border: 1px solid #555;
+  border-radius: 6px; padding: 6px 14px; cursor: pointer; font-size: 12px; }
+
+.report-container .loading, .report-container .empty { color: #888; font-size: 14px; }

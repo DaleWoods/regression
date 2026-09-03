@@ -1,0 +1,28 @@
+# systemd unit — use this if you have root on the host.
+#
+#   sudo cp deploy/qa-scanner.service /etc/systemd/system/qa-scanner.service
+#   # edit User, WorkingDirectory and ExecStart paths below first
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now qa-scanner
+#   journalctl -u qa-scanner -f        # logs
+[Unit]
+Description=Multi-brand QA Scanner dashboard
+After=network.target
+
+[Service]
+Type=simple
+# Change to the account that owns the checkout (must have run npm install +
+# npx playwright install chromium as this user).
+User=qa
+WorkingDirectory=/opt/qa-scanner
+# .env in the working directory is loaded by the app itself (dotenv).
+ExecStart=/usr/bin/node server/index.js
+Restart=always
+RestartSec=5
+# Chromium needs a writable HOME for its sandbox/profile bits.
+Environment=HOME=/opt/qa-scanner
+# Modest resource guard-rails (optional).
+MemoryMax=2G
+
+[Install]
+WantedBy=multi-user.target

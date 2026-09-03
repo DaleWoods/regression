@@ -1,0 +1,23 @@
+[
+  {
+    "id": "goldsmiths",
+    "name": "Goldsmiths",
+    "sitemapUrl": "https://www.goldsmiths.co.uk/sitemap.xml",
+    "brandColour": "#8a7147",
+    "logo": "/logos/goldsmiths.svg"
+  },
+  {
+    "id": "mappin-webb",
+    "name": "Mappin & Webb",
+    "sitemapUrl": "https://www.mappinandwebb.com/sitemap.xml",
+    "brandColour": "#1d3c34",
+    "logo": "/logos/mappin-webb.svg"
+  },
+  {
+    "id": "watches-of-switzerland",
+    "name": "Watches of Switzerland",
+    "sitemapUrl": "https://www.watches-of-switzerland.co.uk/sitemap.xml",
+    "brandColour": "#12284b",
+    "logo": "/logos/watches-of-switzerland.svg"
+  }
+]
