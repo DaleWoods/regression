@@ -1,0 +1,24 @@
+# Render.com blueprint — lets Render deploy this app straight from the repo.
+# In the Render dashboard: New → Blueprint → pick this repository. Render
+# reads this file, builds the Dockerfile, and prompts for the two secrets.
+services:
+  - type: web
+    name: qa-scanner
+    runtime: docker
+    rootDir: qa-scanner
+    plan: starter
+    healthCheckPath: /login.html
+    disk:
+      name: qa-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      # Prompted for in the Render dashboard on first deploy — never in git.
+      - key: DASHBOARD_PASSWORD
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: DATA_DIR
+        value: /data
+      # Render injects PORT automatically; the app reads it. HOST defaults
+      # to 0.0.0.0 which is what Render expects.

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Multi-brand QA Scanner</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/report.css">
+</head>
+<body>
+  <header class="app-header">
+    <h1>QA Scanner</h1>
+    <button id="logout" class="ghost">Log out</button>
+  </header>
+
+  <nav id="tabs" class="tabs" aria-label="Brands"></nav>
+
+  <main id="panel" class="panel" hidden>
+    <div class="toolbar">
+      <img id="brand-logo" class="brand-logo" alt="">
+      <div class="toolbar-info">
+        <div id="brand-name" class="brand-name"></div>
+        <div id="scan-meta" class="scan-meta"></div>
+      </div>
+      <div class="toolbar-actions">
+        <span id="status" class="status"></span>
+        <button id="run" class="primary">Run scan</button>
+        <a id="export" class="button" download>Export CSV</a>
+      </div>
+    </div>
+    <div id="report" class="report-container"><p class="loading">Loading…</p></div>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
